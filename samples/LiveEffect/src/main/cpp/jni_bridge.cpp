@@ -84,6 +84,34 @@ Java_com_google_oboe_samples_liveEffect_LiveEffectEngine_setPlaybackDeviceId(
     engine->setPlaybackDeviceId(deviceId);
 }
 
+JNIEXPORT void JNICALL
+Java_com_google_oboe_samples_liveEffect_LiveEffectEngine_setSignalProcessingType(
+        JNIEnv *env, jclass, jint type) {
+    if (engine == nullptr) {
+        LOGE(
+                "Engine is null, you must call createEngine before calling this "
+                "method");
+        return;
+    }
+
+    engine->setSignalProcessingType(type);
+}
+
+JNIEXPORT void JNICALL
+Java_com_google_oboe_samples_liveEffect_LiveEffectEngine_setModelType(
+        JNIEnv *env, jclass, jint type) {
+    if (engine == nullptr) {
+        LOGE(
+                "Engine is null, you must call createEngine before calling this "
+                "method");
+        return;
+    }
+
+    engine->setModelType(type);
+}
+
+
+
 JNIEXPORT jboolean JNICALL
 Java_com_google_oboe_samples_liveEffect_LiveEffectEngine_setAPI(JNIEnv *env,
                                                                jclass type,

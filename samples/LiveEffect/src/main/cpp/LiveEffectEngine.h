@@ -29,6 +29,8 @@ public:
 
     void setRecordingDeviceId(int32_t deviceId);
     void setPlaybackDeviceId(int32_t deviceId);
+    void setSignalProcessingType(int32_t type);
+    void setModelType(int32_t type);
 
     /**
      * @param isOn
@@ -56,11 +58,13 @@ private:
     bool              mIsEffectOn = false;
     int32_t           mRecordingDeviceId = oboe::kUnspecified;
     int32_t           mPlaybackDeviceId = oboe::kUnspecified;
+    int32_t           mSignalProcessingType = oboe::kUnspecified;
+    int32_t           mModelType = oboe::kUnspecified;
     const oboe::AudioFormat mFormat = oboe::AudioFormat::Float; // for easier processing
     oboe::AudioApi    mAudioApi = oboe::AudioApi::AAudio;
     int32_t           mSampleRate = oboe::kUnspecified;
-    const int32_t     mInputChannelCount = oboe::ChannelCount::Stereo;
-    const int32_t     mOutputChannelCount = oboe::ChannelCount::Stereo;
+    const int32_t     mInputChannelCount = oboe::ChannelCount::Mono; // Was: Stereo
+    const int32_t     mOutputChannelCount = oboe::ChannelCount::Mono; //
 
     std::shared_ptr<oboe::AudioStream> mRecordingStream;
     std::shared_ptr<oboe::AudioStream> mPlayStream;

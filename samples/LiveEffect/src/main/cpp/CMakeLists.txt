@@ -25,6 +25,8 @@ add_subdirectory(${OBOE_DIR} ./oboe-bin)
 
 add_library(liveEffect
     SHARED
+        fft_funcs.cpp
+        # FullDuplexPass.cpp
         LiveEffectEngine.cpp
         FullDuplexStream.cpp
         jni_bridge.cpp
@@ -34,13 +36,24 @@ target_include_directories(liveEffect
         ${SAMPLE_ROOT_DIR}/debug-utils
         ${OBOE_DIR}/include)
 target_link_libraries(liveEffect
-    PRIVATE
-        oboe
-        android
-        atomic
-        log)
+        PRIVATE
+            oboe
+            android
+            atomic
+            tflite-lib
+            log)
 
 # Enable optimization flags: if having problems with source level debugging,
 # disable -Ofast ( and debug ), re-enable it after done debugging.
-target_compile_options(liveEffect PRIVATE -Wall -Werror "$<$<CONFIG:RELEASE>:-Ofast>")
 
+
+add_library(tflite-lib SHARED IMPORTED)
+set_target_properties(tflite-lib
+        PROPERTIES IMPORTED_LOCATION
+        ${SAMPLE_ROOT_DIR}/LiveEffect/src/main/jni/${ANDROID_ABI}/libtensorflowlite_jni.so)
+include_directories( ${JNI_DIR} )
+#target_link_libraries(
+#        tflite-lib
+#        ${log-lib})
+
+target_compile_options(liveEffect PRIVATE -Wall -Werror "$<$<CONFIG:RELEASE>:-Ofast>")

@@ -60,12 +60,11 @@
         android:id="@+id/recDeviceLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/activity_horizontal_margin"
         android:layout_marginLeft="@dimen/activity_horizontal_margin"
-        android:layout_marginTop="@dimen/activity_vertical_margin"
+        android:layout_marginTop="32dp"
         android:text="@string/recording_device"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/apiSelectionGroup"/>
+        app:layout_constraintTop_toBottomOf="@+id/apiSelectionGroup" />
 
     <com.google.oboe.samples.audio_device.AudioDeviceSpinner
         android:id="@+id/recording_devices_spinner"
@@ -92,9 +91,7 @@
         android:id="@+id/playback_devices_spinner"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/activity_horizontal_margin"
         android:layout_marginLeft="@dimen/activity_horizontal_margin"
-        android:layout_marginTop="0dp"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/playDeviceLabel" />
 
@@ -102,27 +99,65 @@
         android:id="@+id/button_toggle_effect"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="72dp"
+        android:layout_marginTop="32dp"
         android:gravity="center"
         android:text="@string/start_effect"
         android:textAllCaps="false"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.53"
+        app:layout_constraintHorizontal_bias="0.551"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/playback_devices_spinner" />
+        app:layout_constraintTop_toBottomOf="@id/nn_model_spinner" />
 
     <TextView
         android:id="@+id/status_view_text"
         android:layout_width="0dp"
         android:layout_height="60dp"
         android:layout_marginStart="@dimen/activity_horizontal_margin"
-        android:layout_marginEnd="@dimen/activity_horizontal_margin"
         android:layout_marginTop="@dimen/activity_vertical_group_margin"
+        android:layout_marginEnd="@dimen/activity_horizontal_margin"
         android:lines="6"
         android:text="@string/status_warning"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="1.0"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/button_toggle_effect"
-        app:layout_constraintBottom_toBottomOf="parent" />
+        app:layout_constraintVertical_bias="0.744" />
+
+    <TextView
+        android:id="@+id/signal_processing"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:text="Signal Processing"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/playback_devices_spinner" />
+
+    <Spinner
+        android:id="@+id/signal_processing_spinner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="@dimen/activity_horizontal_margin"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/signal_processing" />
+
+    <TextView
+        android:id="@+id/neural_net_model"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:text="Model"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/signal_processing_spinner" />
+
+    <Spinner
+        android:id="@+id/nn_model_spinner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="@dimen/activity_horizontal_margin"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/neural_net_model" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

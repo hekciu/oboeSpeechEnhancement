@@ -27,15 +27,17 @@ import androidx.core.app.ActivityCompat;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.oboe.samples.audio_device.AudioDeviceListEntry;
 import com.google.oboe.samples.audio_device.AudioDeviceSpinner;
-
+import com.google.oboe.samples.audio_device.R.layout;
 /**
  * TODO: Update README.md and go through and comment sample
  */
@@ -51,6 +53,9 @@ public class MainActivity extends Activity
     private Button toggleEffectButton;
     private AudioDeviceSpinner recordingDeviceSpinner;
     private AudioDeviceSpinner playbackDeviceSpinner;
+    private Spinner signalProcessingSpinner;
+    private Spinner nnModelSpinner;
+    private TextView nnModelText;
     private boolean isPlaying = false;
 
     private int apiSelection = OBOE_API_AAUDIO;
@@ -69,7 +74,7 @@ public class MainActivity extends Activity
                 toggleEffect();
             }
         });
-        toggleEffectButton.setText(getString(R.string.start_effect));
+        toggleEffectButton.setText("Start");
 
         recordingDeviceSpinner = findViewById(R.id.recording_devices_spinner);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -102,6 +107,53 @@ public class MainActivity extends Activity
                 }
             });
         }
+
+        // Signal Processing and Model spinners in layout
+        signalProcessingSpinner = (Spinner) findViewById(R.id.signal_processing_spinner);
+        ArrayAdapter<CharSequence> adapter_signal_processing = ArrayAdapter.createFromResource(this,
+                R.array.signal_processing_type, layout.audio_devices);
+        adapter_signal_processing.setDropDownViewResource(layout.audio_devices);
+        signalProcessingSpinner.setAdapter(adapter_signal_processing);
+
+        nnModelSpinner = (Spinner) findViewById(R.id.nn_model_spinner);
+        ArrayAdapter<CharSequence> adapter_model = ArrayAdapter.createFromResource(this,
+                R.array.nn_models_array, layout.audio_devices);
+        adapter_model.setDropDownViewResource(layout.audio_devices);
+        nnModelSpinner.setAdapter(adapter_model);
+        
+        nnModelText = (TextView) findViewById(R.id.neural_net_model);
+
+
+        // Event handling
+        signalProcessingSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> adapterView, View view, int pos, long id) {
+                LiveEffectEngine.setSignalProcessingType(pos);
+
+                // Model choice visibility
+                if (pos == 0) {
+                    nnModelSpinner.setVisibility(View.VISIBLE);
+                    nnModelText.setVisibility(View.VISIBLE);
+                }
+                else {
+                    nnModelSpinner.setVisibility(View.INVISIBLE);
+                    nnModelText.setVisibility(View.INVISIBLE);
+                }
+            }
+            public void onNothingSelected(AdapterView<?> adapterView) {
+                // Do nothing
+            }
+        });
+
+
+        nnModelSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> adapterView, View view, int pos, long id) {
+                LiveEffectEngine.setModelType(pos);
+            }
+            public void onNothingSelected(AdapterView<?> adapterView) {
+                // Do nothing
+            }
+        });
+
 
         ((RadioGroup)findViewById(R.id.apiSelectionGroup)).check(R.id.aaudioButton);
         findViewById(R.id.aaudioButton).setOnClickListener(new RadioButton.OnClickListener(){
@@ -178,8 +230,15 @@ public class MainActivity extends Activity
 
         if (!isRecordPermissionGranted()){
             requestRecordPermission();
+
             return;
         }
+
+        if(!isWritePermissionGranted()){
+            requestWritePermission(); // Request write permission for FFT logs.
+            return;
+        }
+
 
         boolean success = LiveEffectEngine.setEffectOn(true);
         if (success) {
@@ -226,10 +285,23 @@ public class MainActivity extends Activity
                 PackageManager.PERMISSION_GRANTED);
     }
 
+    private boolean isWritePermissionGranted() {
+        return (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED);
+    }
+
+
     private void requestRecordPermission(){
         ActivityCompat.requestPermissions(
                 this,
                 new String[]{Manifest.permission.RECORD_AUDIO},
+                AUDIO_EFFECT_REQUEST);
+    }
+
+    private void requestWritePermission(){
+        ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
                 AUDIO_EFFECT_REQUEST);
     }
 

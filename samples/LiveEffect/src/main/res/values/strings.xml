@@ -16,4 +16,18 @@
     <string name="apiSelection">APIs</string>
     <string name="aaudio">AAudio</string>
     <string name="sles">OpenSL ES</string>
+
+    <string name="sample_rate">Sample rate:</string>
+
+    <string-array name="signal_processing_type">
+        <item>Neural Network</item>
+        <item>FFT+iFFT</item>
+        <item>Copy Input to Output</item>
+    </string-array>
+
+    <string-array name="nn_models_array">
+        <item>3-layer bidirectional LSTM</item>
+        <item>3-layer LSTM stateful/2-layer GRU</item>
+    </string-array>
+
 </resources>

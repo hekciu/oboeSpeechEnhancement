@@ -19,6 +19,8 @@
 
 #include "LiveEffectEngine.h"
 
+#define  ALOG(...)  __android_log_print(ANDROID_LOG_INFO,LOG_TAG,__VA_ARGS__)
+
 LiveEffectEngine::LiveEffectEngine() {
     assert(mOutputChannelCount == mInputChannelCount);
 }
@@ -29,6 +31,14 @@ void LiveEffectEngine::setRecordingDeviceId(int32_t deviceId) {
 
 void LiveEffectEngine::setPlaybackDeviceId(int32_t deviceId) {
     mPlaybackDeviceId = deviceId;
+}
+
+void LiveEffectEngine::setSignalProcessingType(int32_t type) {
+    mSignalProcessingType = type;
+}
+
+void LiveEffectEngine::setModelType(int32_t type) {
+    mModelType = type;
 }
 
 bool LiveEffectEngine::isAAudioRecommended() {
@@ -89,7 +99,7 @@ oboe::Result  LiveEffectEngine::openStreams() {
         return result;
     } else {
         // The input stream needs to run at the same sample rate as the output.
-        mSampleRate = mPlayStream->getSampleRate();
+        mSampleRate = 8000; //mPlayStream->getSampleRate()
     }
     warnIfNotLowLatency(mPlayStream);
 
@@ -125,7 +135,7 @@ oboe::AudioStreamBuilder *LiveEffectEngine::setupRecordingStreamParameters(
     return setupCommonStreamParameters(builder);
 }
 
-/**
+/**c
  * Sets the stream parameters which are specific to playback, including device
  * id and the dataCallback function, which must be set for low latency
  * playback.
@@ -156,8 +166,13 @@ oboe::AudioStreamBuilder *LiveEffectEngine::setupCommonStreamParameters(
     builder->setAudioApi(mAudioApi)
         ->setFormat(mFormat)
         ->setFormatConversionAllowed(true)
+        ->setChannelCount(1)
+        ->setFramesPerDataCallback(64)
+        ->setSampleRate(8000)
         ->setSharingMode(oboe::SharingMode::Exclusive)
-        ->setPerformanceMode(oboe::PerformanceMode::LowLatency);
+        ->setPerformanceMode(oboe::PerformanceMode::LowLatency) // oboe::PerformanceMode::LowLatency
+        ->setSignalProcessing(mSignalProcessingType)
+        ->setModel(mModelType);
     return builder;
 }
 
