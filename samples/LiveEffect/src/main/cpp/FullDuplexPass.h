@@ -21,7 +21,7 @@
 #define  ALOG(...)  __android_log_print(ANDROID_LOG_INFO,"test",__VA_ARGS__)
 #endif
 
-//#include "fileHelper.h"
+#include "fileHelper.h"
 #include "onnxHelper.h"
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
@@ -29,9 +29,11 @@
 class FullDuplexPass : public oboe::FullDuplexStream {
 private:
     OnnxHelper* onnxHelper;
+    FileHelper* fileHelper;
 public:
     FullDuplexPass(AAssetManager* manager) {
         this->onnxHelper = new OnnxHelper(manager);
+        this->fileHelper = new FileHelper(manager); //chyba z tym managerem jednak zly pomysl
     }
     ~FullDuplexPass() {
         delete this->onnxHelper;
@@ -51,15 +53,15 @@ public:
         // It also assumes the channel count for each stream is the same.
         int32_t samplesPerFrame = getOutputStream()->getChannelCount();
         int32_t numInputSamples = numInputFrames * samplesPerFrame;
-        int32_t numOutputSamples = numOutputFrames * samplesPerFrame; // 2176 with emulator API 34
+        int32_t numOutputSamples = numOutputFrames * samplesPerFrame;
 
 //        ALOG("n_samples: %d", numOutputSamples);
 
         // It is possible that there may be fewer input than output samples.
         int32_t samplesToProcess = std::min(numInputSamples, numOutputSamples);
         for (int32_t i = 0; i < samplesToProcess; i++) {
-            *outputFloats++ = *inputFloats++ * 0.95; // do some arbitrary processing
-            //*outputFloats++ = *inputFloats++;
+//            *outputFloats++ = *inputFloats++ * 0.95; // do some arbitrary processing
+            *outputFloats++ = *inputFloats++;
         }
 
         // If there are fewer input samples then clear the rest of the buffer.
@@ -72,6 +74,7 @@ public:
 //        fileHelper.saveValue((double)numOutputSamples, "/data/data/LiveEffect/numOutputSamples.txt");
 
         this->onnxHelper->simpleModelProcessing(outputFloats, numOutputSamples);
+//        this->onnxHelper->modelProcessingWithPrevValues(outputFloats, numOutputSamples);
 
         return oboe::DataCallbackResult::Continue;
     }

@@ -9,14 +9,19 @@
 #define  ALOG(...)  __android_log_print(ANDROID_LOG_INFO,"test",__VA_ARGS__)
 #endif
 
-
 #include <string>
 #include <fstream>
 
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
+
 class FileHelper {
 private:
+    AAssetManager** mgr;
 public:
-    FileHelper() {};
+    FileHelper(AAssetManager* manager) {
+        this->mgr = &manager;
+    };
     ~FileHelper() {};
 
     void saveValue(double input, std::string path) {
