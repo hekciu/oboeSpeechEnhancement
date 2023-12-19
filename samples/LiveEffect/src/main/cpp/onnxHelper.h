@@ -8,6 +8,7 @@
 #include <onnxruntime_cxx_api.h>
 #include <onnxruntime_c_api.h> // [jlasecki]: It is actually defined so don't worry
 #include <algorithm>
+#include <cmath>
 #include "constants.h"
 
 #include <android/asset_manager.h>
@@ -34,18 +35,42 @@ private:
         return true;
     }
 
-    void _fillZeros(float* arr, int numToFill) {
+    void _fillZeros(float * arr, int numToFill) {
         for (int i = 0; i < numToFill; i++) {
             arr[i] = 0;
         }
     }
 
-    void _fillWithValuesBuffer(float* arr, int arrStart, int valuesBufferStart, int numToFill, float* valuesBuffer) {
+    void _fillWithValuesBuffer(float * arr, int arrStart, int valuesBufferStart, int numToFill, float* valuesBuffer) {
         int j = valuesBufferStart;
 
         for (int i = arrStart; i < numToFill; i++) {
             arr[i] = valuesBuffer[j];
             j++;
+        }
+    }
+
+    void _multiplySamples(float * firstArr, float * secondArr, int N) {
+        for (int i = 0; i < N; i++) {
+            firstArr[i] = firstArr[i] * secondArr[i];
+        }
+    }
+
+    void _addSamples(float * firstArr, float * secondArr, int N) {
+        for (int i = 0; i < N; i++) {
+            firstArr[i] = firstArr[i] + secondArr[i];
+        }
+    }
+
+    float _degrees_to_radians(float x) {
+        return (x / 360) * 2 * this->PI;
+    }
+
+    void _createWindow() {
+        for (int frameNumber = 0; frameNumber < SAMPLES_TO_MODEL; frameNumber++) {
+            float degrees = (frameNumber / SAMPLES_TO_MODEL) * 180;
+            float radians = this->_degrees_to_radians(degrees);
+            this->window[frameNumber] = sin(radians) * sin(radians);
         }
     }
 
@@ -57,10 +82,15 @@ private:
     AAssetManager** mgr;
     AAsset* modelAsset;
     const void * modelDataBuffer;
-    float prevSamples[FRAMES_PER_DATA_CALLBACK];
-    float allCurrentSamples[FRAMES_PER_DATA_CALLBACK * 2];
-    float curOutputs[FRAMES_PER_DATA_CALLBACK];
 
+    float prevSamples[SAMPLES_PER_DATA_CALLBACK];
+    float allCurrentSamples[SAMPLES_TO_MODEL];
+    float curOutputs[SAMPLES_PER_DATA_CALLBACK];
+
+    float lastOutputToAdd[SAMPLES_PER_DATA_CALLBACK];
+
+    const float PI = 3.14159265359;
+    float window[SAMPLES_TO_MODEL];
 public:
     OnnxHelper(AAssetManager* manager) {
         this->mgr = &manager;
@@ -90,7 +120,11 @@ public:
 
         this->_checkStatus(this->g_ort->GetAllocatorWithDefaultOptions(&this->allocator));
 
-        this->_fillZeros(this->prevSamples, FRAMES_PER_DATA_CALLBACK);
+        this->_fillZeros(this->prevSamples, SAMPLES_PER_DATA_CALLBACK);
+
+        this->_createWindow();
+
+        this->_fillZeros(this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
     }
 
     ~OnnxHelper() {
@@ -103,10 +137,10 @@ public:
         delete this->mgr;
     }
 
-
-
-    float* dumbProcessing(float* input) {
-        return input;
+    void dumbProcessing(float * input, float * output, int N) {
+        for (int i = 0; i < N; i++) {
+            output[i] = input[i];
+        }
     }
 
     void simpleModelProcessing(float* input, size_t numSamples) {
@@ -183,15 +217,19 @@ public:
         this->g_ort->ReleaseValue(outputTensor);
     }
 
-    void modelProcessingWithPrevValues(float* input, size_t numSamples) {
+    void modelProcessingWithPrevValues(float* input, size_t numSamples, bool useWindow = false) {
         if (numSamples == 0) {
             ALOG("0 samples, skipping simpleModelProcessing");
             return;
         }
 
         // Merging input tensor with prev values
-        this->_fillWithValuesBuffer(this->allCurrentSamples, 0, 0, FRAMES_PER_DATA_CALLBACK, this->prevSamples);
-        this->_fillWithValuesBuffer(this->allCurrentSamples, FRAMES_PER_DATA_CALLBACK, 0, 2 * FRAMES_PER_DATA_CALLBACK, input);
+        this->_fillWithValuesBuffer(this->allCurrentSamples, 0, 0, SAMPLES_PER_DATA_CALLBACK, this->prevSamples);
+        this->_fillWithValuesBuffer(this->allCurrentSamples, SAMPLES_PER_DATA_CALLBACK, 0, 2 * SAMPLES_PER_DATA_CALLBACK, input);
+
+        if (useWindow) {
+            this->_multiplySamples(this->allCurrentSamples, this->window, SAMPLES_TO_MODEL);
+        }
 
         const int64_t shape[] = {(int64_t)numSamples * 2}; // We will be using new merged samples array
         size_t dataLenBytes = shape[0] * sizeof(float);
@@ -258,14 +296,21 @@ public:
         this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
         float * floatBuffer = (float *) buffer;
 
-        // Taking only 'current' samples from output
-        this->_fillWithValuesBuffer(this->curOutputs, 0, FRAMES_PER_DATA_CALLBACK, FRAMES_PER_DATA_CALLBACK, floatBuffer);
+        // Taking last samples from output
+        this->_fillWithValuesBuffer(this->curOutputs, 0, 0, SAMPLES_PER_DATA_CALLBACK, floatBuffer);
 
-        std::copy(this->curOutputs, this->curOutputs + FRAMES_PER_DATA_CALLBACK, input);
+        if (useWindow) {
+            this->_addSamples(this->curOutputs, this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
+
+            // Adding new portion of samples to add
+            this->_fillWithValuesBuffer(this->lastOutputToAdd, 0, SAMPLES_PER_DATA_CALLBACK, SAMPLES_TO_MODEL, floatBuffer);
+        }
+
+        std::copy(this->curOutputs, this->curOutputs + SAMPLES_PER_DATA_CALLBACK, input);
         this->g_ort->ReleaseValue(inputTensor);
         this->g_ort->ReleaseValue(outputTensor);
 
-        this->_fillWithValuesBuffer(this->prevSamples, 0,  FRAMES_PER_DATA_CALLBACK, FRAMES_PER_DATA_CALLBACK, floatBuffer);
+        this->_fillWithValuesBuffer(this->prevSamples, 0,  SAMPLES_PER_DATA_CALLBACK, SAMPLES_PER_DATA_CALLBACK, floatBuffer);
     }
 };
 

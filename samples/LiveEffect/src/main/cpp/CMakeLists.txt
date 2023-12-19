@@ -35,6 +35,8 @@ set_target_properties(
         INTERFACE_INCLUDE_DIRECTORIES ${LIBS_DIR}/onnxruntime/include
 )
 
+### [jlasecki]: INCLUDE PFFFT LIBRARY ###
+
 add_library(liveEffect
     SHARED
         LiveEffectEngine.cpp

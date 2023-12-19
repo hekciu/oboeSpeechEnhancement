@@ -1,55 +1,66 @@
 //
-// Created by jakub on 20.11.2023.
+// Created by jakub on 13.12.2023.
 //
 
 #ifndef SAMPLES_FFTHELPER_H
 #define SAMPLES_FFTHELPER_H
 
 #include <complex>
+#include "constants.h"
 
-//const double PI = 3.1415926536;
-//
-//// using hardcoded data type float
-//
-//class FftHelper {
-//private:
-//    unsigned int _bitReverse(unsigned int x, int log2n) {
-//        int n = 0;
-////        int mask = 0x1;
-//        for (int i=0; i < log2n; i++) {
-//            n <<= 1;
-//            n |= (x & 1);
-//            x >>= 1;
-//        }
-//        return n;
-//    }
-//
-//    const std::complex<float> J;
-//public:
-//    FftHelper(): J(0, 1) {};
-//    ~FftHelper() {};
-//
-//    void calculateFft(float * inputArray, float * outputArray, int log2n) {
-//        int n = 1 << log2n;
-//        for (unsigned int i=0; i < n; ++i) {
-//            b[bitReverse(i, log2n)] = a[i];
-//        }
-//        for (int s = 1; s <= log2n; ++s) {
-//            int m = 1 << s;
-//            int m2 = m >> 1;
-//            this->complex w(1, 0);
-//            complex wm = exp(-J * (PI / m2));
-//            for (int j=0; j < m2; ++j) {
-//                for (int k=j; k < n; k += m) {
-//                    complex t = w * b[k + m2];
-//                    complex u = b[k];
-//                    b[k] = u + t;
-//                    b[k + m2] = u - t;
-//                }
-//                w *= wm;
-//            }
-//        }
-//    };
-//};
+// pseudecode from here https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm
+
+class FftHelper {
+private:
+    std::complex<float> _i;
+    float _PI = 3.14159265359;
+
+    void _split_real(float * samples, float * odds, float * evens, int output_size) {
+        for (int i = 0; i < output_size; i++) {
+            int odd_index = 2 * i + 1;
+            int even_index = 2 * i;
+
+            odds[i] = samples[odd_index];
+            evens[i] = samples[even_index];
+        }
+    }
+public:
+    FftHelper() {
+        this->_i = std::complex<float>(0, 1);
+
+    }
+
+    ~FftHelper() { }
+
+    void calculate_fft(float * inputs, std::complex<float> * outputs, int N) {
+        // we assume that length of inputs == FFT_N
+
+        if (N == 1) {
+            outputs[0] = inputs[0];
+            return;
+        }
+
+        int split_outputs_size = N /2;
+
+        float * odds = new float(split_outputs_size);
+        float * evens = new float(split_outputs_size);
+
+        this->_split_real(inputs, odds, evens, split_outputs_size);
+
+        std::complex<float> * odds_output = new std::complex<float>(split_outputs_size);
+        std::complex<float> * evens_output = new std::complex<float>(split_outputs_size);
+
+        this->calculate_fft(odds, odds_output, split_outputs_size);
+        this->calculate_fft(evens, evens_output, split_outputs_size);
+
+        for (int k = 0; k < split_outputs_size; k++) {
+            std::complex<float> p = evens_output[k];
+            std::complex<float> q = exp((-2 * this->_PI * this->_i) / std::complex<float>(N, 0));
+
+            outputs[k] = p + q;
+            outputs[k + split_outputs_size] = p - q;
+        }
+    }
+};
 
 #endif //SAMPLES_FFTHELPER_H

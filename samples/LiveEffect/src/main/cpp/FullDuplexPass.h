@@ -70,12 +70,9 @@ public:
             *outputFloats++ = 0.0; // silence
         }
 
-//        FileHelper fileHelper = FileHelper();
-//        fileHelper.saveValue((double)numOutputSamples, "/data/data/LiveEffect/numOutputSamples.txt");
-
-        this->onnxHelper->simpleModelProcessing(outputFloats, numOutputSamples);
-//        this->onnxHelper->modelProcessingWithPrevValues(outputFloats, numOutputSamples);
-
+//        this->onnxHelper->simpleModelProcessing(outputFloats, numOutputSamples);
+        this->onnxHelper->modelProcessingWithPrevValues(outputFloats, numOutputSamples, true);
+//        this->onnxHelper->dumbProcessing(outputFloats, outputFloats, numOutputSamples);
         return oboe::DataCallbackResult::Continue;
     }
 };
