@@ -13,13 +13,14 @@
 
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
-
-#ifndef ORT_API_VERSION
-#define ORT_API_VERSION   17
-#endif
+#include <android/log.h>
 
 #ifndef ALOG
-#define  ALOG(...)  __android_log_print(ANDROID_LOG_INFO,"test",__VA_ARGS__)
+#define  ALOG(...)  __android_log_print(ANDROID_LOG_INFO,"test","%s",__VA_ARGS__)
+#endif
+
+#ifndef ALOG_NUM
+#define ALOG_NUM(...) __android_log_print(ANDROID_LOG_INFO, "test", "%s", std::to_string(__VA_ARGS__).c_str());
 #endif
 
 // Inspired by this one: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/c_cxx/Snpe_EP/main.cpp
@@ -91,6 +92,9 @@ private:
 
     const float PI = 3.14159265359;
     float window[SAMPLES_TO_MODEL];
+    float gruHiddenStates[GRU_LAYERS_NUMBER][SAMPLES_TO_MODEL]; // Could be done with 2d array, like dataWithGru
+
+    float dataWithGru[GRU_LAYERS_NUMBER + 1][SAMPLES_TO_MODEL];
 public:
     OnnxHelper(AAssetManager* manager) {
         this->mgr = &manager;
@@ -101,14 +105,7 @@ public:
         this->_checkStatus(this->g_ort->SetIntraOpNumThreads(this->session_options, 1));
         this->_checkStatus(this->g_ort->SetSessionGraphOptimizationLevel(this->session_options, ORT_ENABLE_BASIC));
 
-        const char* model_path = "model.onnx";
-        this->modelAsset = AAssetManager_open(*this->mgr, model_path, AASSET_MODE_BUFFER);
-
-        std::vector<const char*> options_keys = {"runtime"};
-        std::vector<const char*> options_values = {"CPU"};
-
-//        this->_checkStatus(this->g_ort->SessionOptionsAppendExecutionProvider(this->session_options, "SNPE", options_keys.data(),
-//                                                     options_values.data(), options_keys.size()));
+        this->modelAsset = AAssetManager_open(*this->mgr, "model_gru.onnx", AASSET_MODE_BUFFER);
 
         size_t modelDataBufferLength = (size_t) AAsset_getLength(this->modelAsset);
         this->modelDataBuffer = AAsset_getBuffer(this->modelAsset);
@@ -125,6 +122,14 @@ public:
         this->_createWindow();
 
         this->_fillZeros(this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
+
+        for (size_t n = 0; n < GRU_LAYERS_NUMBER; n++) {
+            this->_fillZeros(this->gruHiddenStates[n], SAMPLES_TO_MODEL);
+        }
+
+        for (size_t n = 0; n < GRU_LAYERS_NUMBER + 1; n++) {
+            this->_fillZeros(this->dataWithGru[n], SAMPLES_TO_MODEL);
+        }
     }
 
     ~OnnxHelper() {
@@ -217,7 +222,7 @@ public:
         this->g_ort->ReleaseValue(outputTensor);
     }
 
-    void modelProcessingWithPrevValues(float* input, size_t numSamples, bool useWindow = false) {
+    void modelProcessingWithPrevValues(float * input, size_t numSamples, bool useWindow = false, bool useGru = true) {
         if (numSamples == 0) {
             ALOG("0 samples, skipping simpleModelProcessing");
             return;
@@ -231,15 +236,15 @@ public:
             this->_multiplySamples(this->allCurrentSamples, this->window, SAMPLES_TO_MODEL);
         }
 
-        const int64_t shape[] = {(int64_t)numSamples * 2}; // We will be using new merged samples array
+        int64_t shape[] = { (int64_t) SAMPLES_TO_MODEL };
         size_t dataLenBytes = shape[0] * sizeof(float);
         size_t shapeLen = 1;
-
 
         OrtMemoryInfo * memoryInfo = NULL;
         this->_checkStatus(this->g_ort->CreateCpuMemoryInfo(OrtDeviceAllocator, OrtMemTypeDefault, &memoryInfo));
 
         OrtValue * inputTensor = NULL;
+
         this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
                                                                        this->allCurrentSamples,
                                                                        dataLenBytes,
@@ -249,6 +254,7 @@ public:
                                                                        &inputTensor));
 
         OrtValue * outputTensor = NULL;
+
         this->_checkStatus(this->g_ort->CreateTensorAsOrtValue(this->allocator,
                                                                shape,
                                                                shapeLen,
@@ -262,8 +268,8 @@ public:
         this->_checkStatus(this->g_ort->SessionGetInputCount(this->session, &inputCount));
         this->_checkStatus(this->g_ort->SessionGetOutputCount(this->session, &outputCount));
 
-        char * inputNames[1] = {};
-        char * outputNames[1] = {};
+        std::vector<char *> inputNames  = {};
+        std::vector<char *> outputNames = {};
 
         for (size_t i = 0; i < inputCount; i++) {
             char * name;
@@ -271,7 +277,7 @@ public:
                                                                 i,
                                                                 this->allocator,
                                                                 &name));
-            inputNames[i] = name;
+            inputNames.push_back(name);
         }
 
         for (size_t i = 0; i < outputCount; i++) {
@@ -280,21 +286,87 @@ public:
                                                                  i,
                                                                  this->allocator,
                                                                  &name));
-            outputNames[i] = name;
+
+            outputNames.push_back(name);
         }
 
-        this->_checkStatus(this->g_ort->Run(this->session,
-                                            nullptr,
-                                            inputNames,
-                                            &inputTensor,
-                                            inputCount,
-                                            outputNames,
-                                            outputCount,
-                                            &outputTensor));
+        OrtValue * inputTensors[GRU_LAYERS_NUMBER + 1] = {
+                inputTensor,
+                NULL,
+                NULL,
+                NULL
+        };
 
-        void * buffer = NULL;;
-        this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
-        float * floatBuffer = (float *) buffer;
+        OrtValue * outputTensors[GRU_LAYERS_NUMBER + 1] = {
+                outputTensor,
+                NULL,
+                NULL,
+                NULL
+        };
+
+        if (useGru) {
+            for (int n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
+                this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
+                                                                               this->gruHiddenStates[n-1],
+                                                                               dataLenBytes,
+                                                                               shape,
+                                                                               shapeLen,
+                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               &inputTensors[n]));
+
+                this->_checkStatus(this->g_ort->CreateTensorAsOrtValue(this->allocator,
+                                                                       shape,
+                                                                       shapeLen,
+                                                                       ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                                       &outputTensors[n]));
+
+
+            }
+
+            this->_checkStatus(this->g_ort->Run(this->session,
+                                                nullptr,
+                                                inputNames.data(),
+                                                inputTensors,
+                                                inputCount,
+                                                outputNames.data(),
+                                                outputCount,
+                                                outputTensors));
+        } else {
+            this->_checkStatus(this->g_ort->Run(this->session,
+                                                nullptr,
+                                                inputNames.data(),
+                                                &inputTensor,
+                                                inputCount,
+                                                outputNames.data(),
+                                                outputCount,
+                                                &outputTensor));
+        }
+
+        void * buffer = NULL;
+        float * floatBuffer = NULL;
+
+        if (useGru) {
+            if (outputCount < GRU_LAYERS_NUMBER + 1) {
+                throw std::invalid_argument("Input model doesn't provide enough outputs for GRU hidden states");
+            }
+
+            this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[0], &buffer));
+
+            floatBuffer = (float *) buffer;
+
+            void * gruStateBuffers[GRU_LAYERS_NUMBER] = {
+
+            };
+
+            for (size_t n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
+                this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[n], &gruStateBuffers[n - 1]));
+
+                this->_fillWithValuesBuffer(this->gruHiddenStates[n - 1], 0, 0, SAMPLES_TO_MODEL, (float *) gruStateBuffers[n-1]);
+            }
+        } else {
+            this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
+            floatBuffer = (float *) buffer;
+        }
 
         // Taking last samples from output
         this->_fillWithValuesBuffer(this->curOutputs, 0, 0, SAMPLES_PER_DATA_CALLBACK, floatBuffer);
@@ -309,6 +381,21 @@ public:
         std::copy(this->curOutputs, this->curOutputs + SAMPLES_PER_DATA_CALLBACK, input);
         this->g_ort->ReleaseValue(inputTensor);
         this->g_ort->ReleaseValue(outputTensor);
+
+        if (useGru) {
+            for (int n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
+                this->g_ort->ReleaseValue(inputTensors[n]);
+                this->g_ort->ReleaseValue(outputTensors[n]);
+            }
+        }
+
+        for (int i = 0; i < inputCount; i++) {
+            delete inputNames[i];
+        }
+
+        for (int i = 0; i < outputCount; i++) {
+            delete outputNames[i];
+        }
 
         this->_fillWithValuesBuffer(this->prevSamples, 0,  SAMPLES_PER_DATA_CALLBACK, SAMPLES_PER_DATA_CALLBACK, floatBuffer);
     }

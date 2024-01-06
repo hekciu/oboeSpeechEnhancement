@@ -22,7 +22,6 @@
 
 #include "LiveEffectEngine.h"
 #include "FullDuplexPass.h"
-#include "constants.h"
 
 #ifndef ALOG
 #define  ALOG(...)  __android_log_print(ANDROID_LOG_INFO,"test",__VA_ARGS__)

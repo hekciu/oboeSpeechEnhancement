@@ -24,7 +24,6 @@
 #include "FullDuplexPass.h"
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
-#include "constants.h"
 
 class LiveEffectEngine : public oboe::AudioStreamCallback {
 public:

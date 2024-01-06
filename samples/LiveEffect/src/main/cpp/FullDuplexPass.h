@@ -17,11 +17,7 @@
 #ifndef SAMPLES_FULLDUPLEXPASS_H
 #define SAMPLES_FULLDUPLEXPASS_H
 
-#ifndef ALOG
-#define  ALOG(...)  __android_log_print(ANDROID_LOG_INFO,"test",__VA_ARGS__)
-#endif
 
-#include "fileHelper.h"
 #include "onnxHelper.h"
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
@@ -29,11 +25,10 @@
 class FullDuplexPass : public oboe::FullDuplexStream {
 private:
     OnnxHelper* onnxHelper;
-    FileHelper* fileHelper;
+
 public:
     FullDuplexPass(AAssetManager* manager) {
         this->onnxHelper = new OnnxHelper(manager);
-        this->fileHelper = new FileHelper(manager); //chyba z tym managerem jednak zly pomysl
     }
     ~FullDuplexPass() {
         delete this->onnxHelper;
@@ -71,7 +66,7 @@ public:
         }
 
 //        this->onnxHelper->simpleModelProcessing(outputFloats, numOutputSamples);
-        this->onnxHelper->modelProcessingWithPrevValues(outputFloats, numOutputSamples, true);
+        this->onnxHelper->modelProcessingWithPrevValues(outputFloats, numOutputSamples, true, true);
 //        this->onnxHelper->dumbProcessing(outputFloats, outputFloats, numOutputSamples);
         return oboe::DataCallbackResult::Continue;
     }
