@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include "constants.h"
+#include "FourierProcessor.h"
 
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
@@ -92,9 +93,9 @@ private:
 
     const float PI = 3.14159265359;
     float window[SAMPLES_TO_MODEL];
-    float gruHiddenStates[GRU_LAYERS_NUMBER][SAMPLES_TO_MODEL]; // Could be done with 2d array, like dataWithGru
+    float gruHiddenStates[GRU_LAYERS_NUMBER][SAMPLES_TO_MODEL];
 
-    float dataWithGru[GRU_LAYERS_NUMBER + 1][SAMPLES_TO_MODEL];
+    FourierProcessor processor;
 public:
     OnnxHelper(AAssetManager* manager) {
         this->mgr = &manager;
@@ -125,10 +126,6 @@ public:
 
         for (size_t n = 0; n < GRU_LAYERS_NUMBER; n++) {
             this->_fillZeros(this->gruHiddenStates[n], SAMPLES_TO_MODEL);
-        }
-
-        for (size_t n = 0; n < GRU_LAYERS_NUMBER + 1; n++) {
-            this->_fillZeros(this->dataWithGru[n], SAMPLES_TO_MODEL);
         }
     }
 
@@ -222,7 +219,11 @@ public:
         this->g_ort->ReleaseValue(outputTensor);
     }
 
-    void modelProcessingWithPrevValues(float * input, size_t numSamples, bool useWindow = false, bool useGru = true) {
+    void modelProcessingWithPrevValues(float * input,
+                                       size_t numSamples,
+                                       bool useWindow = false,
+                                       bool useGru = true,
+                                       bool useDft = true) {
         if (numSamples == 0) {
             ALOG("0 samples, skipping simpleModelProcessing");
             return;

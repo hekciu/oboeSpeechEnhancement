@@ -17,7 +17,6 @@
 #ifndef SAMPLES_FULLDUPLEXPASS_H
 #define SAMPLES_FULLDUPLEXPASS_H
 
-
 #include "onnxHelper.h"
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
