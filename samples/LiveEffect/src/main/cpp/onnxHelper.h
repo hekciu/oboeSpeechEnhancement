@@ -96,6 +96,11 @@ private:
     float gruHiddenStates[GRU_LAYERS_NUMBER][SAMPLES_TO_MODEL];
 
     FourierProcessor processor;
+
+    float dftInputReal[SAMPLES_TO_MODEL];
+    float dftInputImag[SAMPLES_TO_MODEL];
+
+    float idftOutput[SAMPLES_TO_MODEL];
 public:
     OnnxHelper(AAssetManager* manager) {
         this->mgr = &manager;
@@ -106,7 +111,7 @@ public:
         this->_checkStatus(this->g_ort->SetIntraOpNumThreads(this->session_options, 1));
         this->_checkStatus(this->g_ort->SetSessionGraphOptimizationLevel(this->session_options, ORT_ENABLE_BASIC));
 
-        this->modelAsset = AAssetManager_open(*this->mgr, "model_gru.onnx", AASSET_MODE_BUFFER);
+        this->modelAsset = AAssetManager_open(*this->mgr, "model_gru_dft.onnx", AASSET_MODE_BUFFER);
 
         size_t modelDataBufferLength = (size_t) AAsset_getLength(this->modelAsset);
         this->modelDataBuffer = AAsset_getBuffer(this->modelAsset);
@@ -292,17 +297,11 @@ public:
         }
 
         OrtValue * inputTensors[GRU_LAYERS_NUMBER + 1] = {
-                inputTensor,
-                NULL,
-                NULL,
-                NULL
+                inputTensor
         };
 
         OrtValue * outputTensors[GRU_LAYERS_NUMBER + 1] = {
-                outputTensor,
-                NULL,
-                NULL,
-                NULL
+                outputTensor
         };
 
         if (useGru) {
@@ -324,23 +323,108 @@ public:
 
             }
 
-            this->_checkStatus(this->g_ort->Run(this->session,
-                                                nullptr,
-                                                inputNames.data(),
-                                                inputTensors,
-                                                inputCount,
-                                                outputNames.data(),
-                                                outputCount,
-                                                outputTensors));
+            if (useDft) {
+                float * dftInput[2] = {
+                        this->dftInputReal,
+                        this->dftInputImag
+                };
+
+                this->processor.dft(this->allCurrentSamples, dftInput);
+
+                OrtValue * inputTensorReal = NULL;
+                OrtValue * inputTensorImag = NULL;
+
+                this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
+                                                                               dftInput[0],
+                                                                               dataLenBytes,
+                                                                               shape,
+                                                                               shapeLen,
+                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               &inputTensorReal));
+
+                this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
+                                                                               dftInput[1],
+                                                                               dataLenBytes,
+                                                                               shape,
+                                                                               shapeLen,
+                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               &inputTensorImag));
+
+                OrtValue * inputTensorsComplex[GRU_LAYERS_NUMBER + 2] = {
+                        inputTensorReal,
+                        inputTensorImag
+                };
+
+                OrtValue * outputTensorReal = NULL;
+                OrtValue * outputTensorImag = NULL;
+
+                OrtValue * outputTensorsComplex[GRU_LAYERS_NUMBER + 2] = {
+                        outputTensorReal,
+                        outputTensorImag
+                };
+
+                for (int i = 2; i < GRU_LAYERS_NUMBER + 2; i++) {
+                    inputTensorsComplex[i] = inputTensors[i - 1];
+                    outputTensorsComplex[i] = outputTensors[i - 1];
+                }
+
+                this->_checkStatus(this->g_ort->Run(this->session,
+                                                    nullptr,
+                                                    inputNames.data(),
+                                                    inputTensorsComplex,
+                                                    inputCount,
+                                                    outputNames.data(),
+                                                    outputCount,
+                                                    outputTensorsComplex));
+
+                void * realDataBuffer = NULL;
+                void * imagDataBuffer = NULL;
+
+                this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[0], &realDataBuffer));
+                this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[1], &imagDataBuffer));
+
+                float * floatRealDataBuffer = (float *) realDataBuffer;
+                float * floatImagDataBuffer = (float *) imagDataBuffer;
+
+                float * dftOutput[2] = {
+                        floatRealDataBuffer,
+                        floatImagDataBuffer
+                };
+
+                this->processor.idft(dftOutput, this->idftOutput);
+
+                outputTensors[0] = NULL;
+
+                this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
+                                                                               dftOutput,
+                                                                               dataLenBytes,
+                                                                               shape,
+                                                                               shapeLen,
+                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               &outputTensors[0]));
+            } else {
+                this->_checkStatus(this->g_ort->Run(this->session,
+                                                    nullptr,
+                                                    inputNames.data(),
+                                                    inputTensors,
+                                                    inputCount,
+                                                    outputNames.data(),
+                                                    outputCount,
+                                                    outputTensors));
+            }
         } else {
-            this->_checkStatus(this->g_ort->Run(this->session,
-                                                nullptr,
-                                                inputNames.data(),
-                                                &inputTensor,
-                                                inputCount,
-                                                outputNames.data(),
-                                                outputCount,
-                                                &outputTensor));
+            if (useDft) {
+                throw std::invalid_argument("DFT without GRU not implementet yet");
+            } else {
+                this->_checkStatus(this->g_ort->Run(this->session,
+                                                    nullptr,
+                                                    inputNames.data(),
+                                                    &inputTensor,
+                                                    inputCount,
+                                                    outputNames.data(),
+                                                    outputCount,
+                                                    &outputTensor));
+            }
         }
 
         void * buffer = NULL;

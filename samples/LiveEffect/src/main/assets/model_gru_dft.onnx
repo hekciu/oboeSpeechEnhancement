@@ -1,0 +1,47 @@
+pytorch2.1.0:Æ
+'
+input1output1
+Identity_0"Identity
+'
+input2output2
+Identity_1"Identity
+'
+input3output3
+Identity_2"Identity
+'
+input4output4
+Identity_3"Identity
+(
+input5.1input5
+Identity_4"Identity
+main_graphZ
+input1
+	
+ÈZ
+input2
+	
+ÈZ
+input3
+	
+ÈZ
+input4
+	
+ÈZ
+input5.1
+	
+Èb
+output1
+	
+Èb
+output2
+	
+Èb
+output3
+	
+Èb
+output4
+	
+Èb
+input5
+	
+ÈB

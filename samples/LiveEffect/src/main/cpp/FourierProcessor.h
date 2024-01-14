@@ -78,12 +78,12 @@ public:
 
     void dft(float * input, float ** output) {
         for (int k = 0; k < this->samplesNumber; k++) {
-            output[k][0] = 0; // real part
-            output[k][1] = 0; // imag part
+            output[0][k] = 0; // real part
+            output[1][k] = 0; // imag part
 
             for (int n = 0; n < this->samplesNumber; n++) {
-                output[k][0] += input[n] * this->dftFactorsRealPart[k][n];
-                output[k][1] += input[n] * this->dftFactorsImagPart[k][n];
+                output[0][k] += input[n] * this->dftFactorsRealPart[k][n];
+                output[1][k] += input[n] * this->dftFactorsImagPart[k][n];
             }
         }
     }
@@ -93,8 +93,8 @@ public:
             output[k] = 0;
 
             for (int n = 0; n < this->samplesNumber; n++) {
-                output[k] += input[n][0] * this->idftFactorsRealPart[k][n] -
-                             input[n][1] * this->idftFactorsImagPart[k][n];
+                output[k] += input[0][n] * this->idftFactorsRealPart[k][n] -
+                             input[1][n] * this->idftFactorsImagPart[k][n];
             }
         }
     }

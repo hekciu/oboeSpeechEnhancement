@@ -65,7 +65,11 @@ public:
         }
 
 //        this->onnxHelper->simpleModelProcessing(outputFloats, numOutputSamples);
-        this->onnxHelper->modelProcessingWithPrevValues(outputFloats, numOutputSamples, true, true);
+        this->onnxHelper->modelProcessingWithPrevValues(outputFloats,
+        numOutputSamples,
+        true,
+        true,
+        true);
 //        this->onnxHelper->dumbProcessing(outputFloats, outputFloats, numOutputSamples);
         return oboe::DataCallbackResult::Continue;
     }
