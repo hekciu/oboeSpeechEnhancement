@@ -410,8 +410,8 @@ public:
                 void * realDataBuffer = NULL;
                 void * imagDataBuffer = NULL;
 
-                this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[0], &realDataBuffer));
-                this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[1], &imagDataBuffer));
+                this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensorsComplex[0], &realDataBuffer));
+                this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensorsComplex[1], &imagDataBuffer));
 
                 float * floatRealDataBuffer = (float *) realDataBuffer;
                 float * floatImagDataBuffer = (float *) imagDataBuffer;

@@ -9,7 +9,7 @@
 #include "constants.h"
 
 const float PI = 3.14159265359;
-const float E = 2.718281828459;
+//const float E = 2.718281828459;
 
 class FourierProcessor {
 private:
@@ -67,6 +67,7 @@ private:
                                                   sin(coeffAngle * k) / this->samplesNumber;
             }
         }
+
     }
 public:
     FourierProcessor() {
@@ -95,7 +96,6 @@ public:
             for (int n = 0; n < this->samplesNumber; n++) {
                 output[k] += input[0][n] * this->idftFactorsRealPart[k][n] -
                              input[1][n] * this->idftFactorsImagPart[k][n];
-
             }
         }
     }
