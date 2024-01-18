@@ -49,24 +49,32 @@ public:
         int32_t numInputSamples = numInputFrames * samplesPerFrame;
         int32_t numOutputSamples = numOutputFrames * samplesPerFrame;
 
+        ALOG_NUM(numInputSamples);
+        ALOG_NUM(numOutputSamples);
+
 //        ALOG("n_samples: %d", numOutputSamples);
 
         // It is possible that there may be fewer input than output samples.
-        int32_t samplesToProcess = std::min(numInputSamples, numOutputSamples);
-        for (int32_t i = 0; i < samplesToProcess; i++) {
+//        int32_t samplesToProcess = std::min(numInputSamples, numOutputSamples);
+//        for (int32_t i = 0; i < samplesToProcess; i++) {
 //            *outputFloats++ = *inputFloats++ * 0.95; // do some arbitrary processing
-            *outputFloats++ = *inputFloats++;
-        }
+//            *outputFloats++ = *inputFloats++;
+//        }
 
         // If there are fewer input samples then clear the rest of the buffer.
-        int32_t samplesLeft = numOutputSamples - numInputSamples;
-        for (int32_t i = 0; i < samplesLeft; i++) {
-            *outputFloats++ = 0.0; // silence
-        }
+//        int32_t samplesLeft = numOutputSamples - numInputSamples;
+//        for (int32_t i = 0; i < samplesLeft; i++) {
+//            *outputFloats++ = 0.0; // silence
+//        }
 
-//        this->onnxHelper->simpleModelProcessing(outputFloats, numOutputSamples);
-        this->onnxHelper->modelProcessingWithPrevValues(outputFloats,
-        numOutputSamples,
+//        for (int i = 0; i < 100; i++) {
+//            outputFloats[i] = 0;
+//        }
+
+//        this->onnxHelper->simpleModelProcessing(inputFloats, outputFloats, numOutputSamples);
+        this->onnxHelper->modelProcessingWithPrevValues(inputFloats,
+        outputFloats,
+        numInputSamples,
         true,
         true,
         true);

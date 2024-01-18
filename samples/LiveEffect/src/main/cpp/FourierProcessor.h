@@ -95,6 +95,7 @@ public:
             for (int n = 0; n < this->samplesNumber; n++) {
                 output[k] += input[0][n] * this->idftFactorsRealPart[k][n] -
                              input[1][n] * this->idftFactorsImagPart[k][n];
+
             }
         }
     }

@@ -43,12 +43,14 @@ private:
         }
     }
 
-    void _fillWithValuesBuffer(float * arr, int arrStart, int valuesBufferStart, int numToFill, float* valuesBuffer) {
+    void _fillWithValuesBuffer(float * arr, int arrStart, int valuesBufferStart, int nSamples, const float* valuesBuffer) {
         int j = valuesBufferStart;
+        int k = arrStart;
 
-        for (int i = arrStart; i < numToFill; i++) {
-            arr[i] = valuesBuffer[j];
+        for (int i = 0; i < nSamples; i++) {
+            arr[k] = valuesBuffer[j];
             j++;
+            k++;
         }
     }
 
@@ -70,7 +72,7 @@ private:
 
     void _createWindow() {
         for (int frameNumber = 0; frameNumber < SAMPLES_TO_MODEL; frameNumber++) {
-            float degrees = (frameNumber / SAMPLES_TO_MODEL) * 180;
+            float degrees = ((float)frameNumber / (float)SAMPLES_TO_MODEL) * 180;
             float radians = this->_degrees_to_radians(degrees);
             this->window[frameNumber] = sin(radians) * sin(radians);
         }
@@ -93,7 +95,7 @@ private:
 
     const float PI = 3.14159265359;
     float window[SAMPLES_TO_MODEL];
-    float gruHiddenStates[GRU_LAYERS_NUMBER][SAMPLES_TO_MODEL];
+    float gruHiddenStates[GRU_LAYERS_NUMBER][GRU_HIDDEN_STATE_SIZE];
 
     FourierProcessor processor;
 
@@ -111,7 +113,7 @@ public:
         this->_checkStatus(this->g_ort->SetIntraOpNumThreads(this->session_options, 1));
         this->_checkStatus(this->g_ort->SetSessionGraphOptimizationLevel(this->session_options, ORT_ENABLE_BASIC));
 
-        this->modelAsset = AAssetManager_open(*this->mgr, "model_gru_dft.onnx", AASSET_MODE_BUFFER);
+        this->modelAsset = AAssetManager_open(*this->mgr, "model_something.onnx", AASSET_MODE_BUFFER);
 
         size_t modelDataBufferLength = (size_t) AAsset_getLength(this->modelAsset);
         this->modelDataBuffer = AAsset_getBuffer(this->modelAsset);
@@ -130,7 +132,7 @@ public:
         this->_fillZeros(this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
 
         for (size_t n = 0; n < GRU_LAYERS_NUMBER; n++) {
-            this->_fillZeros(this->gruHiddenStates[n], SAMPLES_TO_MODEL);
+            this->_fillZeros(this->gruHiddenStates[n], GRU_HIDDEN_STATE_SIZE);
         }
     }
 
@@ -150,10 +152,20 @@ public:
         }
     }
 
-    void simpleModelProcessing(float* input, size_t numSamples) {
+    void simpleModelProcessing(const float* input, float * output, size_t numSamples) {
         if (numSamples == 0) {
             ALOG("0 samples, skipping simpleModelProcessing");
             return;
+        }
+
+        float actualInput[SAMPLES_PER_DATA_CALLBACK];
+
+        for (int i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
+            if (i < numSamples) {
+                actualInput[i] = input[i];
+            } else {
+                actualInput[i] = 0;
+            }
         }
 
         const int64_t shape[] = {(int64_t)numSamples};
@@ -166,7 +178,7 @@ public:
 
         OrtValue * inputTensor = NULL;
         this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
-                                                                       input,
+                                                                       actualInput,
                                                                        dataLenBytes,
                                                                        shape,
                                                                        shapeLen,
@@ -216,27 +228,42 @@ public:
                                             outputCount,
                                             &outputTensor));
 
-        void * buffer = NULL;;
+        void * buffer = NULL;
         this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
         float * floatBuffer = (float *) buffer;
-        std::copy(floatBuffer, floatBuffer + shape[0], input);
+
+        for (int i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
+            *output++ = floatBuffer[i];
+        }
+//        std::copy(floatBuffer, floatBuffer + shape[0], input);
         this->g_ort->ReleaseValue(inputTensor);
         this->g_ort->ReleaseValue(outputTensor);
     }
 
-    void modelProcessingWithPrevValues(float * input,
+    void modelProcessingWithPrevValues(const float * input,
+                                       float * output,
                                        size_t numSamples,
-                                       bool useWindow = false,
+                                       bool useWindow = true,
                                        bool useGru = true,
                                        bool useDft = true) {
         if (numSamples == 0) {
-            ALOG("0 samples, skipping simpleModelProcessing");
+            ALOG("0 samples, skipping modelProcessingWithPrevValues");
             return;
+        }
+
+        float actualInput[SAMPLES_PER_DATA_CALLBACK];
+
+        for (int i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
+            if (i < numSamples) {
+                actualInput[i] = input[i];
+            } else {
+                actualInput[i] = 0;
+            }
         }
 
         // Merging input tensor with prev values
         this->_fillWithValuesBuffer(this->allCurrentSamples, 0, 0, SAMPLES_PER_DATA_CALLBACK, this->prevSamples);
-        this->_fillWithValuesBuffer(this->allCurrentSamples, SAMPLES_PER_DATA_CALLBACK, 0, 2 * SAMPLES_PER_DATA_CALLBACK, input);
+        this->_fillWithValuesBuffer(this->allCurrentSamples, SAMPLES_PER_DATA_CALLBACK, 0, SAMPLES_PER_DATA_CALLBACK, actualInput);
 
         if (useWindow) {
             this->_multiplySamples(this->allCurrentSamples, this->window, SAMPLES_TO_MODEL);
@@ -304,18 +331,21 @@ public:
                 outputTensor
         };
 
+        const int GRU_CONV_FACTOR = (GRU_HIDDEN_STATE_SIZE/SAMPLES_TO_MODEL);
+        int64_t shapeGru[] = {shape[0] * GRU_CONV_FACTOR};
+
         if (useGru) {
             for (int n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
                 this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
                                                                                this->gruHiddenStates[n-1],
-                                                                               dataLenBytes,
-                                                                               shape,
+                                                                               dataLenBytes * GRU_CONV_FACTOR,
+                                                                               shapeGru,
                                                                                shapeLen,
                                                                                ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
                                                                                &inputTensors[n]));
 
                 this->_checkStatus(this->g_ort->CreateTensorAsOrtValue(this->allocator,
-                                                                       shape,
+                                                                       shapeGru,
                                                                        shapeLen,
                                                                        ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
                                                                        &outputTensors[n]));
@@ -396,7 +426,7 @@ public:
                 outputTensors[0] = NULL;
 
                 this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
-                                                                               dftOutput,
+                                                                               this->idftOutput,
                                                                                dataLenBytes,
                                                                                shape,
                                                                                shapeLen,
@@ -414,7 +444,7 @@ public:
             }
         } else {
             if (useDft) {
-                throw std::invalid_argument("DFT without GRU not implementet yet");
+                throw std::invalid_argument("DFT without GRU not implemented yet");
             } else {
                 this->_checkStatus(this->g_ort->Run(this->session,
                                                     nullptr,
@@ -446,7 +476,7 @@ public:
             for (size_t n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
                 this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[n], &gruStateBuffers[n - 1]));
 
-                this->_fillWithValuesBuffer(this->gruHiddenStates[n - 1], 0, 0, SAMPLES_TO_MODEL, (float *) gruStateBuffers[n-1]);
+                this->_fillWithValuesBuffer(this->gruHiddenStates[n - 1], 0, 0, GRU_HIDDEN_STATE_SIZE, (float *) gruStateBuffers[n-1]);
             }
         } else {
             this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
@@ -458,16 +488,22 @@ public:
 
         if (useWindow) {
             this->_addSamples(this->curOutputs, this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
-
-            // Adding new portion of samples to add
-            this->_fillWithValuesBuffer(this->lastOutputToAdd, 0, SAMPLES_PER_DATA_CALLBACK, SAMPLES_TO_MODEL, floatBuffer);
+            this->_fillWithValuesBuffer(this->lastOutputToAdd, 0, SAMPLES_PER_DATA_CALLBACK, SAMPLES_PER_DATA_CALLBACK, floatBuffer);
         }
 
-        std::copy(this->curOutputs, this->curOutputs + SAMPLES_PER_DATA_CALLBACK, input);
+//        float * zerosArray = new float[100];
+//        this->_fillZeros(zerosArray, 100);
+
+        for (int32_t i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
+            *output++ = this->curOutputs[i];
+        }
+//        this->_fillWithValuesBuffer(*input, 0, 0, SAMPLES_PER_DATA_CALLBACK, zerosArray);
+//        std::copy(this->curOutputs, this->curOutputs + SAMPLES_PER_DATA_CALLBACK, input);
         this->g_ort->ReleaseValue(inputTensor);
         this->g_ort->ReleaseValue(outputTensor);
 
         if (useGru) {
+            // TODO release value for complex numbers
             for (int n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
                 this->g_ort->ReleaseValue(inputTensors[n]);
                 this->g_ort->ReleaseValue(outputTensors[n]);
