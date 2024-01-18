@@ -23,11 +23,11 @@
 
 class FullDuplexPass : public oboe::FullDuplexStream {
 private:
-    OnnxHelper* onnxHelper;
+    OnnxHelper<float> * onnxHelper;
 
 public:
     FullDuplexPass(AAssetManager* manager) {
-        this->onnxHelper = new OnnxHelper(manager);
+        this->onnxHelper = new OnnxHelper<float>(manager);
     }
     ~FullDuplexPass() {
         delete this->onnxHelper;

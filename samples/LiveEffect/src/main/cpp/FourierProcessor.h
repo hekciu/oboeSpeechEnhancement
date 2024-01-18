@@ -8,37 +8,38 @@
 #include <cmath>
 #include "constants.h"
 
-const float PI = 3.14159265359;
 //const float E = 2.718281828459;
 
+template<typename T = float>
 class FourierProcessor {
 private:
+    const T PI = 3.14159265359;
     int samplesNumber = SAMPLES_TO_MODEL;
-    float dftCoeffsRealPart[SAMPLES_TO_MODEL];
-    float dftCoeffsImagPart[SAMPLES_TO_MODEL];
+    T dftCoeffsRealPart[SAMPLES_TO_MODEL];
+    T dftCoeffsImagPart[SAMPLES_TO_MODEL];
 
-    float dftFactorsRealPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
-    float dftFactorsImagPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
+    T dftFactorsRealPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
+    T dftFactorsImagPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
 
-    float idftCoeffsRealPart[SAMPLES_TO_MODEL];
-    float idftCoeffsImagPart[SAMPLES_TO_MODEL];
+    T idftCoeffsRealPart[SAMPLES_TO_MODEL];
+    T idftCoeffsImagPart[SAMPLES_TO_MODEL];
 
-    float idftFactorsRealPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
-    float idftFactorsImagPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
+    T idftFactorsRealPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
+    T idftFactorsImagPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
 
     void calculateDftCoeffs() {
         for (int n = 0; n < this->samplesNumber; n++) {
-            this->dftCoeffsRealPart[n] = cos(-2 * PI * n / this->samplesNumber);
-            this->dftCoeffsImagPart[n] = sin(-2 * PI * n / this->samplesNumber);
+            this->dftCoeffsRealPart[n] = cos(-2 * this->PI * n / this->samplesNumber);
+            this->dftCoeffsImagPart[n] = sin(-2 * this->PI * n / this->samplesNumber);
         }
     }
 
     void calculateDftFactors() { // need to be called after 'calculateDftCoeffs'
         for (int n = 0; n < this->samplesNumber; n++) {
-            float coeffModulus = sqrt(pow(this->dftCoeffsRealPart[n], 2) +
+            T coeffModulus = sqrt(pow(this->dftCoeffsRealPart[n], 2) +
                                       pow(this->dftCoeffsImagPart[n], 2));
 
-            float coeffAngle = atan2(this->dftCoeffsImagPart[n], this->dftCoeffsRealPart[n]);
+            T coeffAngle = atan2(this->dftCoeffsImagPart[n], this->dftCoeffsRealPart[n]);
             for (int k = 0; k < this->samplesNumber; k++) {
                 this->dftFactorsRealPart[n][k] = pow(coeffModulus, k) * cos(coeffAngle * k);
                 this->dftFactorsImagPart[n][k] = pow(coeffModulus, k) * sin(coeffAngle * k);
@@ -48,17 +49,17 @@ private:
 
     void calculateIdftCoeffs() {
         for (int n = 0; n < this->samplesNumber; n++) {
-            this->idftCoeffsRealPart[n] = cos(2 * PI * n / this->samplesNumber);
-            this->idftCoeffsImagPart[n] = sin(2 * PI * n / this->samplesNumber);
+            this->idftCoeffsRealPart[n] = cos(2 * this->PI * n / this->samplesNumber);
+            this->idftCoeffsImagPart[n] = sin(2 * this->PI * n / this->samplesNumber);
         }
     }
 
     void calculateIdftFactors() { // need to be called after 'calculateIdftCoeffs'
         for (int n = 0; n < this->samplesNumber; n++) {
-            float coeffModulus = sqrt(pow(this->idftCoeffsRealPart[n], 2) +
+            T coeffModulus = sqrt(pow(this->idftCoeffsRealPart[n], 2) +
                                       pow(this->idftCoeffsImagPart[n], 2));
 
-            float coeffAngle = atan2(this->idftCoeffsImagPart[n], this->idftCoeffsRealPart[n]);
+            T coeffAngle = atan2(this->idftCoeffsImagPart[n], this->idftCoeffsRealPart[n]);
 
             for (int k = 0; k < this->samplesNumber; k++) {
                 this->idftFactorsRealPart[n][k] = pow(coeffModulus, k) *
@@ -77,7 +78,7 @@ public:
         this->calculateIdftFactors();
     }
 
-    void dft(float * input, float ** output) {
+    void dft(T * input, T ** output) {
         for (int k = 0; k < this->samplesNumber; k++) {
             output[0][k] = 0; // real part
             output[1][k] = 0; // imag part
@@ -89,7 +90,7 @@ public:
         }
     }
 
-    void idft(float ** input, float * output) {
+    void idft(T ** input, T * output) {
         for (int k = 0; k < this->samplesNumber; k++) {
             output[k] = 0;
 

@@ -6,7 +6,7 @@
 #define SAMPLES_ONNXHELPER_H
 #include <vector>
 #include <onnxruntime_cxx_api.h>
-#include <onnxruntime_c_api.h> // [jlasecki]: It is actually defined so don't worry
+#include <onnxruntime_c_api.h>
 #include <algorithm>
 #include <cmath>
 #include "constants.h"
@@ -24,7 +24,7 @@
 #define ALOG_NUM(...) __android_log_print(ANDROID_LOG_INFO, "test", "%s", std::to_string(__VA_ARGS__).c_str());
 #endif
 
-// Inspired by this one: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/c_cxx/Snpe_EP/main.cpp
+template<typename T = float>
 class OnnxHelper {
 private:
     bool _checkStatus(OrtStatus* status) {
@@ -37,47 +37,47 @@ private:
         return true;
     }
 
-    void _fillZeros(float * arr, int numToFill) {
+    void _fillZeros(T * arr, int numToFill) {
         for (int i = 0; i < numToFill; i++) {
             arr[i] = 0;
         }
     }
 
-    void _fillWithValuesBuffer(float * arr, int arrStart, int valuesBufferStart, int nSamples, const float* valuesBuffer) {
+    void _fillWithValuesBuffer(T * arr, int arrStart, int valuesBufferStart, int nSamples, const T * valuesBuffer) {
         int j = valuesBufferStart;
         int k = arrStart;
 
         for (int i = 0; i < nSamples; i++) {
-            arr[k] = valuesBuffer[j];
+            arr[k] = (T) valuesBuffer[j];
             j++;
             k++;
         }
     }
 
-    void _multiplySamples(float * firstArr, float * secondArr, int N) {
+    void _multiplySamples(T * firstArr, T * secondArr, int N) {
         for (int i = 0; i < N; i++) {
             firstArr[i] = firstArr[i] * secondArr[i];
         }
     }
 
-    void _addSamples(float * firstArr, float * secondArr, int N) {
+    void _addSamples(T * firstArr, T * secondArr, int N) {
         for (int i = 0; i < N; i++) {
             firstArr[i] = firstArr[i] + secondArr[i];
         }
     }
 
-    float _degrees_to_radians(float x) {
-        return (x / 360) * 2 * this->PI;
+    T _degrees_to_radians(T x) {
+        return (x / (T)360) * 2 * this->PI;
     }
 
     void _createWindow() {
         for (int frameNumber = 0; frameNumber < SAMPLES_TO_MODEL; frameNumber++) {
-            float degrees = ((float)frameNumber / (float)SAMPLES_TO_MODEL) * 180;
-            float radians = this->_degrees_to_radians(degrees);
+            T degrees = ((T)frameNumber / (T)SAMPLES_TO_MODEL) * 180;
+            T radians = this->_degrees_to_radians(degrees);
             this->window[frameNumber] = sin(radians) * sin(radians);
         }
     }
-
+    ONNXTensorElementDataType tensorType;
     OrtEnv* env;
     const OrtApi* g_ort;
     OrtSessionOptions* session_options;
@@ -87,24 +87,30 @@ private:
     AAsset* modelAsset;
     const void * modelDataBuffer;
 
-    float prevSamples[SAMPLES_PER_DATA_CALLBACK];
-    float allCurrentSamples[SAMPLES_TO_MODEL];
-    float curOutputs[SAMPLES_PER_DATA_CALLBACK];
+    T prevSamples[SAMPLES_PER_DATA_CALLBACK];
+    T allCurrentSamples[SAMPLES_TO_MODEL];
+    T curOutputs[SAMPLES_PER_DATA_CALLBACK];
 
-    float lastOutputToAdd[SAMPLES_PER_DATA_CALLBACK];
+    T lastOutputToAdd[SAMPLES_PER_DATA_CALLBACK];
 
-    const float PI = 3.14159265359;
-    float window[SAMPLES_TO_MODEL];
-    float gruHiddenStates[GRU_LAYERS_NUMBER][GRU_HIDDEN_STATE_SIZE];
+    const T PI = 3.14159265359;
+    T window[SAMPLES_TO_MODEL];
+    T gruHiddenStates[GRU_LAYERS_NUMBER][GRU_HIDDEN_STATE_SIZE];
 
-    FourierProcessor processor;
+    FourierProcessor<T> processor;
 
-    float dftInputReal[SAMPLES_TO_MODEL];
-    float dftInputImag[SAMPLES_TO_MODEL];
+    T dftInputReal[SAMPLES_TO_MODEL];
+    T dftInputImag[SAMPLES_TO_MODEL];
 
-    float idftOutput[SAMPLES_TO_MODEL];
+    T idftOutput[SAMPLES_TO_MODEL];
 public:
     OnnxHelper(AAssetManager* manager) {
+        if (typeid(T) == typeid(float)) {
+            this->tensorType = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+        } else {
+            this->tensorType = ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE;
+        }
+
         this->mgr = &manager;
 
         this->g_ort = OrtGetApiBase()->GetApi(ORT_API_VERSION);
@@ -152,13 +158,13 @@ public:
         }
     }
 
-    void simpleModelProcessing(const float* input, float * output, size_t numSamples) {
+    void simpleModelProcessing(const float * input, float * output, size_t numSamples) {
         if (numSamples == 0) {
             ALOG("0 samples, skipping simpleModelProcessing");
             return;
         }
 
-        float actualInput[SAMPLES_PER_DATA_CALLBACK];
+        T actualInput[SAMPLES_PER_DATA_CALLBACK];
 
         for (int i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
             if (i < numSamples) {
@@ -169,7 +175,7 @@ public:
         }
 
         const int64_t shape[] = {(int64_t)numSamples};
-        size_t dataLenBytes = shape[0] * sizeof(float);
+        size_t dataLenBytes = shape[0] * sizeof(T);
         size_t shapeLen = 1;
 
 
@@ -182,13 +188,13 @@ public:
                                                                        dataLenBytes,
                                                                        shape,
                                                                        shapeLen,
-                                                                       ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                       this->tensorType ,
                                                                        &inputTensor));
         OrtValue * outputTensor = NULL;
         this->_checkStatus(this->g_ort->CreateTensorAsOrtValue(this->allocator,
                                                                shape,
                                                                shapeLen,
-                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                               this->tensorType,
                                                                &outputTensor));
 
         this->g_ort->ReleaseMemoryInfo(memoryInfo);
@@ -230,7 +236,7 @@ public:
 
         void * buffer = NULL;
         this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
-        float * floatBuffer = (float *) buffer;
+        T * floatBuffer = (T *) buffer;
 
         for (int i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
             *output++ = floatBuffer[i];
@@ -251,7 +257,7 @@ public:
             return;
         }
 
-        float actualInput[SAMPLES_PER_DATA_CALLBACK];
+        T actualInput[SAMPLES_PER_DATA_CALLBACK];
 
         for (int i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
             if (i < numSamples) {
@@ -270,7 +276,7 @@ public:
         }
 
         int64_t shape[] = { (int64_t) SAMPLES_TO_MODEL };
-        size_t dataLenBytes = shape[0] * sizeof(float);
+        size_t dataLenBytes = shape[0] * sizeof(T);
         size_t shapeLen = 1;
 
         OrtMemoryInfo * memoryInfo = NULL;
@@ -283,7 +289,7 @@ public:
                                                                        dataLenBytes,
                                                                        shape,
                                                                        shapeLen,
-                                                                       ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                       this->tensorType ,
                                                                        &inputTensor));
 
         OrtValue * outputTensor = NULL;
@@ -291,7 +297,7 @@ public:
         this->_checkStatus(this->g_ort->CreateTensorAsOrtValue(this->allocator,
                                                                shape,
                                                                shapeLen,
-                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                               this->tensorType,
                                                                &outputTensor));
 
         this->g_ort->ReleaseMemoryInfo(memoryInfo);
@@ -341,20 +347,20 @@ public:
                                                                                dataLenBytes * GRU_CONV_FACTOR,
                                                                                shapeGru,
                                                                                shapeLen,
-                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               this->tensorType ,
                                                                                &inputTensors[n]));
 
                 this->_checkStatus(this->g_ort->CreateTensorAsOrtValue(this->allocator,
                                                                        shapeGru,
                                                                        shapeLen,
-                                                                       ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
+                                                                       this->tensorType,
                                                                        &outputTensors[n]));
 
 
             }
 
             if (useDft) {
-                float * dftInput[2] = {
+                T * dftInput[2] = {
                         this->dftInputReal,
                         this->dftInputImag
                 };
@@ -369,7 +375,7 @@ public:
                                                                                dataLenBytes,
                                                                                shape,
                                                                                shapeLen,
-                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               this->tensorType ,
                                                                                &inputTensorReal));
 
                 this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
@@ -377,7 +383,7 @@ public:
                                                                                dataLenBytes,
                                                                                shape,
                                                                                shapeLen,
-                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               this->tensorType ,
                                                                                &inputTensorImag));
 
                 OrtValue * inputTensorsComplex[GRU_LAYERS_NUMBER + 2] = {
@@ -413,10 +419,10 @@ public:
                 this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensorsComplex[0], &realDataBuffer));
                 this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensorsComplex[1], &imagDataBuffer));
 
-                float * floatRealDataBuffer = (float *) realDataBuffer;
-                float * floatImagDataBuffer = (float *) imagDataBuffer;
+                T * floatRealDataBuffer = (T *) realDataBuffer;
+                T * floatImagDataBuffer = (T *) imagDataBuffer;
 
-                float * dftOutput[2] = {
+                T * dftOutput[2] = {
                         floatRealDataBuffer,
                         floatImagDataBuffer
                 };
@@ -430,7 +436,7 @@ public:
                                                                                dataLenBytes,
                                                                                shape,
                                                                                shapeLen,
-                                                                               ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ,
+                                                                               this->tensorType ,
                                                                                &outputTensors[0]));
             } else {
                 this->_checkStatus(this->g_ort->Run(this->session,
@@ -458,7 +464,7 @@ public:
         }
 
         void * buffer = NULL;
-        float * floatBuffer = NULL;
+        T * floatBuffer = NULL;
 
         if (useGru) {
             if (outputCount < GRU_LAYERS_NUMBER + 1) {
@@ -467,7 +473,7 @@ public:
 
             this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[0], &buffer));
 
-            floatBuffer = (float *) buffer;
+            floatBuffer = (T *) buffer;
 
             void * gruStateBuffers[GRU_LAYERS_NUMBER] = {
 
@@ -476,11 +482,11 @@ public:
             for (size_t n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
                 this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[n], &gruStateBuffers[n - 1]));
 
-                this->_fillWithValuesBuffer(this->gruHiddenStates[n - 1], 0, 0, GRU_HIDDEN_STATE_SIZE, (float *) gruStateBuffers[n-1]);
+                this->_fillWithValuesBuffer(this->gruHiddenStates[n - 1], 0, 0, GRU_HIDDEN_STATE_SIZE, (T *) gruStateBuffers[n-1]);
             }
         } else {
             this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
-            floatBuffer = (float *) buffer;
+            floatBuffer = (T *) buffer;
         }
 
         // Taking last samples from output
@@ -495,7 +501,7 @@ public:
 //        this->_fillZeros(zerosArray, 100);
 
         for (int32_t i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
-            *output++ = this->curOutputs[i];
+            *output++ = (float) this->curOutputs[i];
         }
 //        this->_fillWithValuesBuffer(*input, 0, 0, SAMPLES_PER_DATA_CALLBACK, zerosArray);
 //        std::copy(this->curOutputs, this->curOutputs + SAMPLES_PER_DATA_CALLBACK, input);
