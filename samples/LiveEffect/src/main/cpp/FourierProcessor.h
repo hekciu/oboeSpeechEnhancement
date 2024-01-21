@@ -13,8 +13,11 @@
 template<typename T = float>
 class FourierProcessor {
 private:
-    const T PI = 3.14159265359;
+    const T PI = 3.14159265358979323846264338327950288419716939937510;
     int samplesNumber = SAMPLES_TO_MODEL;
+    int fftInputSize;
+    int cooleyTukeyStoragesNum;
+
     T dftCoeffsRealPart[SAMPLES_TO_MODEL];
     T dftCoeffsImagPart[SAMPLES_TO_MODEL];
 
@@ -26,6 +29,17 @@ private:
 
     T idftFactorsRealPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
     T idftFactorsImagPart[SAMPLES_TO_MODEL][SAMPLES_TO_MODEL];
+
+    T ** storagesFirstPartReal;
+    T ** storagesFirstPartImag;
+    T ** storagesSecondPartReal;
+    T ** storagesSecondPartImag;
+
+    T * currentEvenOutput[2];
+    T * currentOddOutput[2];
+
+    T ** inputStoragesFirstPart;
+    T ** inputStoragesSecondPart;
 
     void calculateDftCoeffs() {
         for (int n = 0; n < this->samplesNumber; n++) {
@@ -70,12 +84,69 @@ private:
         }
 
     }
+
+    void createCooleyTukeyStorages() {
+        this->storagesFirstPartReal = new T * [this->cooleyTukeyStoragesNum];
+        this->storagesFirstPartImag = new T * [this->cooleyTukeyStoragesNum];
+        this->storagesSecondPartReal = new T * [this->cooleyTukeyStoragesNum];
+        this->storagesSecondPartImag = new T * [this->cooleyTukeyStoragesNum];
+
+        this->inputStoragesFirstPart = new T * [this->cooleyTukeyStoragesNum];
+        this->inputStoragesSecondPart = new T * [this->cooleyTukeyStoragesNum];
+        int step = 1;
+
+        for (int i = 0; i < this->cooleyTukeyStoragesNum; i++) {
+            step *= 2;
+            this->storagesFirstPartReal[i] = new T [this->fftInputSize / step];
+            this->storagesFirstPartImag[i] = new T [this->fftInputSize / step];
+            this->storagesSecondPartReal[i] = new T [this->fftInputSize / step];
+            this->storagesSecondPartImag[i] = new T [this->fftInputSize / step];
+
+            this->inputStoragesFirstPart[i] = new T [this->fftInputSize / step];
+            this->inputStoragesSecondPart[i] = new T [this->fftInputSize / step];
+        }
+    }
+
+    void destroyCooleyTukeyStorages() {
+        for (int i = 0; i < this->cooleyTukeyStoragesNum; i++) {
+            delete this->storagesFirstPartReal[i];
+            delete this->storagesFirstPartImag[i];
+            delete this->storagesSecondPartReal[i];
+            delete this->storagesSecondPartImag[i];
+
+            delete this->inputStoragesFirstPart[i];
+            delete this->inputStoragesSecondPart[i];
+        }
+        delete this->storagesFirstPartReal;
+        delete this->storagesFirstPartImag;
+        delete this->storagesSecondPartReal;
+        delete this->storagesSecondPartImag;
+
+        delete this->inputStoragesFirstPart;
+        delete this-> inputStoragesSecondPart;
+    }
+
+    void getFftInputSize() { // need to be called before createStorageForCooleyTukey
+        this->fftInputSize = 2;
+        this->cooleyTukeyStoragesNum = 1;
+
+        while (this->fftInputSize < this->samplesNumber) {
+            this->fftInputSize *= 2;
+            this->cooleyTukeyStoragesNum++;
+        }
+    }
 public:
     FourierProcessor() {
+        this->getFftInputSize();
+        this->createCooleyTukeyStorages();
         this->calculateDftCoeffs();
         this->calculateDftFactors();
         this->calculateIdftCoeffs();
         this->calculateIdftFactors();
+    }
+
+    ~FourierProcessor() {
+        this->destroyCooleyTukeyStorages();
     }
 
     void dft(T * input, T ** output) {
@@ -90,6 +161,74 @@ public:
         }
     }
 
+    void fftWithSamplesAddition(T * input, T ** output) {
+        T * biggerInput = new T [this->fftInputSize];
+        for (int n = 0; n < this->fftInputSize; n++) {
+            if (n < this->samplesNumber) {
+                biggerInput[n] = input[n];
+            } else {
+                biggerInput[n] = 0;
+            }
+        }
+
+        T * biggerOutputReal = new T [this->fftInputSize];
+        T * biggerOutputImag = new T [this->fftInputSize];
+
+        T ** biggerOutput = new T * [2];
+        biggerOutput[0] = biggerOutputReal;
+        biggerOutput[1] = biggerOutputImag;
+
+        this->fft(biggerInput, biggerOutput, this->fftInputSize);
+
+        for (int n = 0; n < this->samplesNumber; n++) {
+            output[0][n] = biggerOutput[0][n];
+            output[1][n] = biggerOutput[1][n];
+        }
+
+        delete[] biggerOutputImag;
+        delete[] biggerOutputReal;
+        delete[] biggerInput;
+        delete[] biggerOutput;
+    }
+
+    void fft(T * input, T ** output, int N = -1) {
+        N = N == -1 ? this->fftInputSize : N;
+        int currentStorageNumber = this->cooleyTukeyStoragesNum - log2(N); // TODO check if valid with int
+
+        if (N == 1) {
+            output[0][0] = input[0];
+            output[1][0] = 0;
+            return;
+        }
+
+        for (int i = 0; i < N; i += 2) {
+            this->inputStoragesFirstPart[currentStorageNumber][i / 2] = input[i];
+            this->inputStoragesSecondPart[currentStorageNumber][i / 2] = input[i + 1];
+        }
+
+        this->currentEvenOutput[0] = this->storagesFirstPartReal[currentStorageNumber];
+        this->currentEvenOutput[1] = this->storagesFirstPartImag[currentStorageNumber];
+        this->currentOddOutput[0] = this->storagesSecondPartReal[currentStorageNumber];
+        this->currentOddOutput[1] = this->storagesSecondPartReal[currentStorageNumber];
+
+        this->fft(this->inputStoragesFirstPart[currentStorageNumber], this->currentEvenOutput, N / 2);
+        this->fft(this->inputStoragesSecondPart[currentStorageNumber], this->currentOddOutput, N / 2);
+
+        for (int k = 0; k < N / 2; k++) {
+            T pReal = this->storagesFirstPartReal[currentStorageNumber][k];
+            T pImag = this->storagesFirstPartImag[currentStorageNumber][k];
+
+            T qReal = this->storagesSecondPartReal[currentStorageNumber][k] * cos(-2 * k * this->PI / N);
+            T qImag = this->storagesSecondPartImag[currentStorageNumber][k] * sin(-2 * k * this->PI / N);
+
+            output[0][k] = pReal + qReal;
+            output[1][k] = pImag + qImag;
+
+            output[0][k + N / 2] = pReal - qReal;
+            output[1][k + N / 2] = pImag - qImag;
+        }
+    }
+
     void idft(T ** input, T * output) {
         for (int k = 0; k < this->samplesNumber; k++) {
             output[k] = 0;
@@ -99,6 +238,10 @@ public:
                              input[1][n] * this->idftFactorsImagPart[k][n];
             }
         }
+    }
+
+    void ifft(T ** input, T * output) {
+
     }
 };
 

@@ -74,7 +74,7 @@ private:
         for (int frameNumber = 0; frameNumber < SAMPLES_TO_MODEL; frameNumber++) {
             T degrees = ((T)frameNumber / (T)SAMPLES_TO_MODEL) * 180;
             T radians = this->_degrees_to_radians(degrees);
-            this->window[frameNumber] = sin(radians) * sin(radians);
+            this->window[frameNumber] = pow(sin(radians), 2);
         }
     }
     ONNXTensorElementDataType tensorType;
@@ -93,7 +93,7 @@ private:
 
     T lastOutputToAdd[SAMPLES_PER_DATA_CALLBACK];
 
-    const T PI = 3.14159265359;
+    const T PI = 3.14159265358979323846264338327950288419716939937510;
     T window[SAMPLES_TO_MODEL];
     T gruHiddenStates[GRU_LAYERS_NUMBER][GRU_HIDDEN_STATE_SIZE];
 
