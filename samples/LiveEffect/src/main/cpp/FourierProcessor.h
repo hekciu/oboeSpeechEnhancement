@@ -7,6 +7,8 @@
 
 #include <cmath>
 #include "constants.h"
+#include <vector>
+#include <complex>
 
 //const float E = 2.718281828459;
 
@@ -188,16 +190,16 @@ private:
 public:
     FourierProcessor() {
         this->getFftInputSize();
-        this->createCooleyTukeyStorages();
-        this->calculateDftCoeffs();
-        this->calculateDftFactors();
-        this->calculateIdftCoeffs();
-        this->calculateIdftFactors();
+//        this->createCooleyTukeyStorages();
+//        this->calculateDftCoeffs();
+//        this->calculateDftFactors();
+//        this->calculateIdftCoeffs();
+//        this->calculateIdftFactors();
         this->getRearrangedIndices();
     }
 
     ~FourierProcessor() {
-        this->destroyCooleyTukeyStorages();
+//        this->destroyCooleyTukeyStorages();
         delete rearrangedIndices;
     }
 
@@ -308,6 +310,93 @@ public:
             output[i] = copy[this->rearrangedIndices[i]];
         }
         delete[] copy;
+    }
+
+
+    std::vector<std::complex<T>> fftVectorsRec(const std::vector<std::complex<T>> &input) {
+        int N = input.size();
+
+        if (N == 1) {
+            return input;
+        }
+
+        std::vector<std::complex<T>> odd, even;
+
+        for (int i = 0; i < N; i+= 2) {
+            even.push_back(input[i]);
+            odd.push_back(input[i + 1]);
+        }
+
+        even = this->fftVectorsRec(even);
+        odd = this->fftVectorsRec(odd);
+
+        std::vector<std::complex<T>> result(N);
+        std::complex<T> multiplier = std::complex<T>(cos((-2.0 * this->PI) / (T)N), sin((-2.0 * this->PI) / (T)N));
+
+        for (int k = 0; k < N / 2; k++) {
+            result[k] = even[k] + pow(multiplier, (T)k) * odd[k];
+            result[k + N / 2] = even[k] + pow(multiplier, (T)k + (T)N / 2) * odd[k];
+        }
+
+        return result;
+    }
+
+
+    void fftVectors(T * input, T ** output) {
+        std::vector<std::complex<T>> inputVec(this->fftInputSize);
+        for (int i = 0; i < this->fftInputSize; i++) {
+            inputVec[i] = std::complex<T>(input[i], 0);
+        }
+
+        std::vector<std::complex<T>> outputVec = this->fftVectorsRec(inputVec);
+
+        for (int i = 0; i < this->fftInputSize; i++) {
+            output[0][i] = outputVec[i].real();
+            output[1][i] = outputVec[i].imag();
+        }
+    }
+
+
+    std::vector<std::complex<T>> ifftVectorsRec(const std::vector<std::complex<T>> &input) {
+        int N = input.size();
+
+        if (N == 1) {
+            return input;
+        }
+
+        std::vector<std::complex<T>> odd, even;
+
+        for (int i = 0; i < N; i+= 2) {
+            even.push_back(input[i]);
+            odd.push_back(input[i + 1]);
+        }
+
+        even = this->fftVectorsRec(even);
+        odd = this->fftVectorsRec(odd);
+
+        std::vector<std::complex<T>> result(N);
+        std::complex<T> multiplier = std::complex<T>(cos((2.0 * this->PI) / (T)N), sin((2.0 * this->PI) / (T)N));
+
+        for (int k = 0; k < N / 2; k++) {
+            result[k] = even[k] + pow(multiplier, (T)k) * odd[k];
+            result[k + N / 2] = even[k] + pow(multiplier, (T)k + (T)N / 2) * odd[k];
+        }
+
+        return result;
+    }
+
+
+    void ifftVectors(T ** input, T * output) {
+        std::vector<std::complex<T>> inputVec(this->fftInputSize);
+        for (int i = 0; i < this->fftInputSize; i++) {
+            inputVec[i] = std::complex<T>(input[0][i], input[1][i]);
+        }
+
+        std::vector<std::complex<T>> outputVec = this->ifftVectorsRec(inputVec);
+
+        for (int i = 0; i < this->fftInputSize; i++) {
+            output[i] = outputVec[i].real() / this->fftInputSize;
+        }
     }
 
 

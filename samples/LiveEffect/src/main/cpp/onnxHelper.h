@@ -365,11 +365,9 @@ public:
                         this->dftInputImag
                 };
 
-                this->allCurrentSamples[0] = 33;
-                this->allCurrentSamples[1] = 66;
 
 //                this->processor.rearrange(this->allCurrentSamples);
-                this->processor.fft(this->allCurrentSamples, dftInput);
+                this->processor.fftVectors(this->allCurrentSamples, dftInput);
 
                 OrtValue * inputTensorReal = NULL;
                 OrtValue * inputTensorImag = NULL;
@@ -431,14 +429,7 @@ public:
                         floatImagDataBuffer
                 };
 
-                this->processor.idft(dftOutput, this->idftOutput);
-
-                float test = 0;
-                for (int i = 0; i < 256; i++) {
-                    test += dftOutput[0][i] + dftOutput[1][i];
-//                    test += this->idftOutput[i];
-                }
-                throw std::invalid_argument(std::to_string(test));
+                this->processor.ifftVectors(dftOutput, this->idftOutput);
 
                 outputTensors[0] = NULL;
 
