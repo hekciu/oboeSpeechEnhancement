@@ -41,6 +41,20 @@ private:
     T ** inputStoragesFirstPart;
     T ** inputStoragesSecondPart;
 
+
+    T ** storagesFirstPartInverse;
+    T ** storagesSecondPartInverse;
+
+    T * currentEvenInputInverse[2];
+    T * currentOddInputInverse[2];
+
+    T ** inputStoragesFirstPartInverseReal;
+    T ** inputStoragesFirstPartInverseImag;
+    T ** inputStoragesSecondPartInverseReal;
+    T ** inputStoragesSecondPartInverseImag;
+
+    int * rearrangedIndices;
+
     void calculateDftCoeffs() {
         for (int n = 0; n < this->samplesNumber; n++) {
             this->dftCoeffsRealPart[n] = cos(-2 * this->PI * n / this->samplesNumber);
@@ -93,6 +107,15 @@ private:
 
         this->inputStoragesFirstPart = new T * [this->cooleyTukeyStoragesNum];
         this->inputStoragesSecondPart = new T * [this->cooleyTukeyStoragesNum];
+
+
+        this->storagesFirstPartInverse = new T * [this->cooleyTukeyStoragesNum];
+        this->storagesSecondPartInverse = new T * [this->cooleyTukeyStoragesNum];
+
+        this->inputStoragesFirstPartInverseReal = new T * [this->cooleyTukeyStoragesNum];
+        this->inputStoragesFirstPartInverseImag = new T * [this->cooleyTukeyStoragesNum];
+        this->inputStoragesSecondPartInverseReal = new T * [this->cooleyTukeyStoragesNum];
+        this->inputStoragesSecondPartInverseImag = new T * [this->cooleyTukeyStoragesNum];
         int step = 1;
 
         for (int i = 0; i < this->cooleyTukeyStoragesNum; i++) {
@@ -104,26 +127,53 @@ private:
 
             this->inputStoragesFirstPart[i] = new T [this->fftInputSize / step];
             this->inputStoragesSecondPart[i] = new T [this->fftInputSize / step];
+
+
+            this->storagesFirstPartInverse[i] = new T [this->fftInputSize / step];
+            this->storagesSecondPartInverse[i] = new T [this->fftInputSize / step];
+
+            this->inputStoragesFirstPartInverseReal[i] = new T [this->fftInputSize / step];
+            this->inputStoragesFirstPartInverseImag[i] = new T [this->fftInputSize / step];
+            this->inputStoragesSecondPartInverseReal[i] = new T [this->fftInputSize / step];
+            this->inputStoragesSecondPartInverseImag[i] = new T [this->fftInputSize / step];
         }
     }
 
     void destroyCooleyTukeyStorages() {
         for (int i = 0; i < this->cooleyTukeyStoragesNum; i++) {
-            delete this->storagesFirstPartReal[i];
-            delete this->storagesFirstPartImag[i];
-            delete this->storagesSecondPartReal[i];
-            delete this->storagesSecondPartImag[i];
+            delete[] this->storagesFirstPartReal[i];
+            delete[] this->storagesFirstPartImag[i];
+            delete[] this->storagesSecondPartReal[i];
+            delete[] this->storagesSecondPartImag[i];
 
-            delete this->inputStoragesFirstPart[i];
-            delete this->inputStoragesSecondPart[i];
+            delete[] this->inputStoragesFirstPart[i];
+            delete[] this->inputStoragesSecondPart[i];
+
+
+            delete[] this->storagesFirstPartInverse[i];
+            delete[] this->storagesSecondPartInverse[i];
+
+            delete[] this->inputStoragesFirstPartInverseReal[i];
+            delete[] this->inputStoragesFirstPartInverseImag[i];
+            delete[] this->inputStoragesSecondPartInverseReal[i];
+            delete[] this->inputStoragesSecondPartInverseImag[i];
         }
-        delete this->storagesFirstPartReal;
-        delete this->storagesFirstPartImag;
-        delete this->storagesSecondPartReal;
-        delete this->storagesSecondPartImag;
+        delete[] this->storagesFirstPartReal;
+        delete[] this->storagesFirstPartImag;
+        delete[] this->storagesSecondPartReal;
+        delete[] this->storagesSecondPartImag;
 
-        delete this->inputStoragesFirstPart;
-        delete this-> inputStoragesSecondPart;
+        delete[] this->inputStoragesFirstPart;
+        delete[] this->inputStoragesSecondPart;
+
+
+        delete[] this->storagesFirstPartInverse;
+        delete[] this->storagesSecondPartInverse;
+
+        delete[] this->inputStoragesFirstPartInverseReal;
+        delete[] this->inputStoragesFirstPartInverseImag;
+        delete[] this->inputStoragesSecondPartInverseReal;
+        delete[] this->inputStoragesSecondPartInverseImag;
     }
 
     void getFftInputSize() { // need to be called before createStorageForCooleyTukey
@@ -143,10 +193,12 @@ public:
         this->calculateDftFactors();
         this->calculateIdftCoeffs();
         this->calculateIdftFactors();
+        this->getRearrangedIndices();
     }
 
     ~FourierProcessor() {
         this->destroyCooleyTukeyStorages();
+        delete rearrangedIndices;
     }
 
     void dft(T * input, T ** output) {
@@ -191,9 +243,77 @@ public:
         delete[] biggerOutput;
     }
 
+    void _indicesHelp(int * input, int N) {
+        if (N == 1) {
+            return;
+        }
+
+        // divide for evens and odds
+        int * evens = new int [N / 2];
+        int * odds = new int [N / 2];
+        for (int i = 0; i < N; i += 2) {
+            evens[i / 2] = input[i];
+            odds[i / 2] = input[i + 1];
+        }
+
+        _indicesHelp(evens, N / 2);
+        _indicesHelp(odds, N / 2);
+
+        for (int i = 0; i < N; i++) {
+            if (i < N / 2) {
+                input[i] = evens[i];
+            } else {
+                input[i] = odds[i - N / 2];
+            }
+        }
+    }
+
+    void getRearrangedIndices() {
+        this->rearrangedIndices = new int [this->fftInputSize];
+        for (int i = 0; i < this->fftInputSize; i++) {
+            this->rearrangedIndices[i] = i;
+        }
+
+        this->_indicesHelp(this->rearrangedIndices, this->fftInputSize);
+    }
+
+    void rearrangeComplex(T ** output) {
+        T ** copy = new T * [2];
+        copy[0] = new T [this->fftInputSize];
+        copy[1] = new T [this->fftInputSize];
+
+        for (int i = 0; i < this->fftInputSize; i++) {
+            copy[0][i] = output[0][i];
+            copy[1][i] = output[1][i];
+        }
+
+        for (int i = 0; i < this->fftInputSize; i++) {
+            output[0][i] = copy[0][this->rearrangedIndices[i]];
+            output[1][i] = copy[1][this->rearrangedIndices[i]];
+        }
+
+        delete[] copy[0];
+        delete[] copy[1];
+        delete[] copy;
+    }
+
+    void rearrange(T * output) {
+        T * copy = new T [this->fftInputSize];
+
+        for (int i = 0; i < this->fftInputSize; i++) {
+            copy[i] = output[i];
+        }
+
+        for (int i = 0; i < this->fftInputSize; i++) {
+            output[i] = copy[this->rearrangedIndices[i]];
+        }
+        delete[] copy;
+    }
+
+
     void fft(T * input, T ** output, int N = -1) {
         N = N == -1 ? this->fftInputSize : N;
-        int currentStorageNumber = this->cooleyTukeyStoragesNum - log2(N); // TODO check if valid with int
+        int currentStorageNumber = this->cooleyTukeyStoragesNum - log2(N);
 
         if (N == 1) {
             output[0][0] = input[0];
@@ -209,17 +329,20 @@ public:
         this->currentEvenOutput[0] = this->storagesFirstPartReal[currentStorageNumber];
         this->currentEvenOutput[1] = this->storagesFirstPartImag[currentStorageNumber];
         this->currentOddOutput[0] = this->storagesSecondPartReal[currentStorageNumber];
-        this->currentOddOutput[1] = this->storagesSecondPartReal[currentStorageNumber];
+        this->currentOddOutput[1] = this->storagesSecondPartImag[currentStorageNumber];
 
         this->fft(this->inputStoragesFirstPart[currentStorageNumber], this->currentEvenOutput, N / 2);
         this->fft(this->inputStoragesSecondPart[currentStorageNumber], this->currentOddOutput, N / 2);
 
         for (int k = 0; k < N / 2; k++) {
-            T pReal = this->storagesFirstPartReal[currentStorageNumber][k];
-            T pImag = this->storagesFirstPartImag[currentStorageNumber][k];
+            T pReal = this->currentEvenOutput[0][k];
+            T pImag = this->currentEvenOutput[1][k];
 
-            T qReal = this->storagesSecondPartReal[currentStorageNumber][k] * cos(-2 * k * this->PI / N);
-            T qImag = this->storagesSecondPartImag[currentStorageNumber][k] * sin(-2 * k * this->PI / N);
+            T qReal = this->currentOddOutput[0][k] * cos((-2 * (T)k * this->PI) / (T)N) -
+                    this->currentOddOutput[1][k] * sin((-2 * (T)k * this->PI) / (T)N);
+
+            T qImag = this->currentOddOutput[1][k] * cos((-2 * (T)k * this->PI) / (T)N) +
+                    this->currentOddOutput[0][k] * sin((-2 * (T)k * this->PI) / (T)N);
 
             output[0][k] = pReal + qReal;
             output[1][k] = pImag + qImag;
@@ -240,8 +363,39 @@ public:
         }
     }
 
-    void ifft(T ** input, T * output) {
+    void ifft(T ** input, T * output, int N = -1) {
+        N = N == -1 ? this->fftInputSize : N;
+        int currentStorageNumber = this->cooleyTukeyStoragesNum - log2(N); // TODO check if valid with int
 
+        if (N == 1) {
+            output[0] = input[0][0] / N;
+            return;
+        }
+
+        for (int i = 0; i < N; i += 2) {
+            this->inputStoragesFirstPartInverseReal[currentStorageNumber][i / 2] = input[0][i];
+            this->inputStoragesFirstPartInverseImag[currentStorageNumber][i / 2] = input[1][i];
+            this->inputStoragesSecondPartInverseReal[currentStorageNumber][i / 2] = input[0][i + 1];
+            this->inputStoragesSecondPartInverseImag[currentStorageNumber][i / 2] = input[1][i + 1];
+        }
+
+        this->currentEvenInputInverse[0] = this->inputStoragesFirstPartInverseReal[currentStorageNumber];
+        this->currentEvenInputInverse[1] = this->inputStoragesFirstPartInverseImag[currentStorageNumber];
+        this->currentOddInputInverse[0] = this->inputStoragesSecondPartInverseReal[currentStorageNumber];
+        this->currentOddInputInverse[1] = this->inputStoragesSecondPartInverseImag[currentStorageNumber];
+
+        this->ifft(this->currentEvenInputInverse, this->storagesFirstPartInverse[currentStorageNumber], N / 2);
+        this->ifft(this->currentOddInputInverse, this->storagesSecondPartInverse[currentStorageNumber], N / 2);
+
+        for (int k = 0; k < N / 2; k++) {
+            T p = this->storagesFirstPartInverse[currentStorageNumber][k];
+
+            T q = this->storagesSecondPartInverse[currentStorageNumber][k] * cos(2 * k * this->PI / N);
+
+            output[k] = (p + q) / N;
+
+            output[k + N / 2] = (p - q) / N;
+        }
     }
 };
 

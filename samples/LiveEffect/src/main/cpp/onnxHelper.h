@@ -119,7 +119,7 @@ public:
         this->_checkStatus(this->g_ort->SetIntraOpNumThreads(this->session_options, 1));
         this->_checkStatus(this->g_ort->SetSessionGraphOptimizationLevel(this->session_options, ORT_ENABLE_BASIC));
 
-        this->modelAsset = AAssetManager_open(*this->mgr, "model_something.onnx", AASSET_MODE_BUFFER);
+        this->modelAsset = AAssetManager_open(*this->mgr, "model_256_input_512_gru.onnx", AASSET_MODE_BUFFER);
 
         size_t modelDataBufferLength = (size_t) AAsset_getLength(this->modelAsset);
         this->modelDataBuffer = AAsset_getBuffer(this->modelAsset);
@@ -365,7 +365,11 @@ public:
                         this->dftInputImag
                 };
 
-                this->processor.dft(this->allCurrentSamples, dftInput);
+                this->allCurrentSamples[0] = 33;
+                this->allCurrentSamples[1] = 66;
+
+//                this->processor.rearrange(this->allCurrentSamples);
+                this->processor.fft(this->allCurrentSamples, dftInput);
 
                 OrtValue * inputTensorReal = NULL;
                 OrtValue * inputTensorImag = NULL;
@@ -429,6 +433,13 @@ public:
 
                 this->processor.idft(dftOutput, this->idftOutput);
 
+                float test = 0;
+                for (int i = 0; i < 256; i++) {
+                    test += dftOutput[0][i] + dftOutput[1][i];
+//                    test += this->idftOutput[i];
+                }
+                throw std::invalid_argument(std::to_string(test));
+
                 outputTensors[0] = NULL;
 
                 this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
@@ -438,6 +449,9 @@ public:
                                                                                shapeLen,
                                                                                this->tensorType ,
                                                                                &outputTensors[0]));
+
+                this->g_ort->ReleaseValue(outputTensorsComplex[0]);
+                this->g_ort->ReleaseValue(outputTensorsComplex[1]);
             } else {
                 this->_checkStatus(this->g_ort->Run(this->session,
                                                     nullptr,
@@ -509,7 +523,6 @@ public:
         this->g_ort->ReleaseValue(outputTensor);
 
         if (useGru) {
-            // TODO release value for complex numbers
             for (int n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
                 this->g_ort->ReleaseValue(inputTensors[n]);
                 this->g_ort->ReleaseValue(outputTensors[n]);
