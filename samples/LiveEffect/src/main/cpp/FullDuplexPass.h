@@ -18,16 +18,24 @@
 #define SAMPLES_FULLDUPLEXPASS_H
 
 #include "onnxHelper.h"
+#include "fileHelper.h"
+#include <string>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 
 class FullDuplexPass : public oboe::FullDuplexStream {
 private:
     OnnxHelper<float> * onnxHelper;
+    FileHelper * fileHelper;
+//    int debugCounter = 0;
 
 public:
     FullDuplexPass(AAssetManager* manager) {
         this->onnxHelper = new OnnxHelper<float>(manager);
+        this->fileHelper = new FileHelper(manager);
     }
     ~FullDuplexPass() {
         delete this->onnxHelper;
@@ -41,6 +49,7 @@ public:
         // Copy the input samples to the output with a little arbitrary gain change.
 
         // This code assumes the data format for both streams is Float.
+
         const float *inputFloats = static_cast<const float *>(inputData);
         float *outputFloats = static_cast<float *>(outputData);
 
@@ -72,12 +81,47 @@ public:
 //        }
 
 //        this->onnxHelper->simpleModelProcessing(inputFloats, outputFloats, numOutputSamples);
+
+//        float * buff = new float[256];
+//        float * outputBuff = new float[256];
+
+//        this->fileHelper->getFloatBufferFromTxt(buff);
+
+//        float * inputFloats = new float[128];
+//
+//        for (int i = 0; i < 128; i++) {
+//            inputFloats[i] = buff[i];
+//        }
+
         this->onnxHelper->modelProcessingWithPrevValues(inputFloats,
         outputFloats,
         numInputSamples,
         true,
         true,
         true);
+
+//        this->onnxHelper->processDebug(inputFloats, outputFloats);
+//
+//        this->debugCounter++;
+
+//        if (debugCounter == 400) {
+//            std::string test = "";
+//            for (int i = 50; i < 80; i++) {
+//                test += "; in: " + std::to_string(inputFloats[i]) + " out: " + std::to_string(outputFloats[i]);
+//            }
+//
+//            throw std::invalid_argument(test);
+//        }
+
+//        this->onnxHelper->doOnlyFourierProcessing(buff, outputBuff);
+
+//        this->onnxHelper->doOnlyWindow(buff, outputBuff);
+//
+//        std::string test = "";
+//        for (int i = 0; i < 256; i++) {
+//            test += std::to_string(outputBuff[i]) + ", ";
+//        }
+//        throw std::invalid_argument(test.c_str());
 //        this->onnxHelper->dumbProcessing(outputFloats, outputFloats, numOutputSamples);
         return oboe::DataCallbackResult::Continue;
     }

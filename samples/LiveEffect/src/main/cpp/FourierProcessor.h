@@ -191,10 +191,10 @@ public:
     FourierProcessor() {
         this->getFftInputSize();
 //        this->createCooleyTukeyStorages();
-//        this->calculateDftCoeffs();
-//        this->calculateDftFactors();
-//        this->calculateIdftCoeffs();
-//        this->calculateIdftFactors();
+        this->calculateDftCoeffs();
+        this->calculateDftFactors();
+        this->calculateIdftCoeffs();
+        this->calculateIdftFactors();
         this->getRearrangedIndices();
     }
 

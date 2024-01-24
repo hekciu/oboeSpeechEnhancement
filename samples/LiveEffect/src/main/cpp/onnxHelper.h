@@ -21,7 +21,7 @@
 #endif
 
 #ifndef ALOG_NUM
-#define ALOG_NUM(...) __android_log_print(ANDROID_LOG_INFO, "test", "%s", std::to_string(__VA_ARGS__).c_str());
+#define ALOG_NUM(...) __android_log_print(ANDROID_LOG_INFO, "test123", "%s", std::to_string(__VA_ARGS__).c_str());
 #endif
 
 template<typename T = float>
@@ -40,6 +40,12 @@ private:
     void _fillZeros(T * arr, int numToFill) {
         for (int i = 0; i < numToFill; i++) {
             arr[i] = 0;
+        }
+    }
+
+    void _fillEights(T * arr, int numToFill) {
+        for (int i = 0; i < numToFill; i++) {
+            arr[i] = 8;
         }
     }
 
@@ -62,7 +68,7 @@ private:
 
     void _addSamples(T * firstArr, T * secondArr, int N) {
         for (int i = 0; i < N; i++) {
-            firstArr[i] = firstArr[i] + secondArr[i];
+            firstArr[i] += secondArr[i];
         }
     }
 
@@ -70,7 +76,14 @@ private:
         return (x / (T)360) * 2 * this->PI;
     }
 
-    void _createWindow() {
+    void _createHammingWindow() {
+        for (int frameNumber = 0; frameNumber < SAMPLES_TO_MODEL; frameNumber++) {
+            this->window[frameNumber] = 0.53836 - 0.46164 * cos(((T)2 * this->PI * (T)frameNumber)
+                    / ((T)SAMPLES_TO_MODEL - 1));
+        }
+    }
+
+    void _createHannWindow() {
         for (int frameNumber = 0; frameNumber < SAMPLES_TO_MODEL; frameNumber++) {
             T degrees = ((T)frameNumber / (T)SAMPLES_TO_MODEL) * 180;
             T radians = this->_degrees_to_radians(degrees);
@@ -119,7 +132,7 @@ public:
         this->_checkStatus(this->g_ort->SetIntraOpNumThreads(this->session_options, 1));
         this->_checkStatus(this->g_ort->SetSessionGraphOptimizationLevel(this->session_options, ORT_ENABLE_BASIC));
 
-        this->modelAsset = AAssetManager_open(*this->mgr, "model_256_input_512_gru.onnx", AASSET_MODE_BUFFER);
+        this->modelAsset = AAssetManager_open(*this->mgr, "model_256_input_512_gru_zeros.onnx", AASSET_MODE_BUFFER);
 
         size_t modelDataBufferLength = (size_t) AAsset_getLength(this->modelAsset);
         this->modelDataBuffer = AAsset_getBuffer(this->modelAsset);
@@ -133,7 +146,7 @@ public:
 
         this->_fillZeros(this->prevSamples, SAMPLES_PER_DATA_CALLBACK);
 
-        this->_createWindow();
+        this->_createHannWindow();
 
         this->_fillZeros(this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
 
@@ -155,6 +168,65 @@ public:
     void dumbProcessing(float * input, float * output, int N) {
         for (int i = 0; i < N; i++) {
             output[i] = input[i];
+        }
+    }
+
+    void doOnlyWindow(float * input, float * output) { // input as 2N
+        float * outputBuff = new float[SAMPLES_TO_MODEL];
+
+        std::copy(input, input + SAMPLES_TO_MODEL, outputBuff);
+
+        this->_multiplySamples(outputBuff, this->window, SAMPLES_TO_MODEL);
+
+        float * buffCopy = new float[SAMPLES_TO_MODEL];
+        std::copy(outputBuff, outputBuff + SAMPLES_TO_MODEL, buffCopy);
+
+        for (int i = 0; i < SAMPLES_TO_MODEL / 2; i++) {
+            output[i] = outputBuff[i] + buffCopy[i + SAMPLES_TO_MODEL / 2];
+            output[i + SAMPLES_TO_MODEL / 2] = outputBuff[i + SAMPLES_TO_MODEL / 2] + buffCopy[i];
+        }
+
+//        for (int i = 0; i < SAMPLES_TO_MODEL; i++) {
+//            output[i] = outputBuff[i];
+//        }
+
+        delete[] outputBuff;
+    }
+
+    void doOnlyFourierProcessing(float * input, float * output) { // input as 2N
+        float ** fftOutput = new float * [2];
+        fftOutput[0] = new float [SAMPLES_TO_MODEL];
+        fftOutput[1] = new float [SAMPLES_TO_MODEL];
+        this->processor.dft(input, fftOutput);
+        this->processor.idft(fftOutput, output);
+    }
+
+    void processDebug(const float * input, float * output) {
+        T actualInput[SAMPLES_PER_DATA_CALLBACK];
+
+        for (int i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
+            if (i < SAMPLES_TO_MODEL) {
+                actualInput[i] = input[i];
+            } else {
+                actualInput[i] = 0;
+            }
+        }
+
+        // Merging input tensor with prev values
+        this->_fillWithValuesBuffer(this->allCurrentSamples, 0, 0, SAMPLES_PER_DATA_CALLBACK, this->prevSamples);
+        this->_fillWithValuesBuffer(this->allCurrentSamples, SAMPLES_PER_DATA_CALLBACK, 0, SAMPLES_PER_DATA_CALLBACK, actualInput);
+
+        this->_fillWithValuesBuffer(this->prevSamples, 0,  0, SAMPLES_PER_DATA_CALLBACK, actualInput);
+
+        this->_multiplySamples(this->allCurrentSamples, this->window, SAMPLES_TO_MODEL);
+
+        this->_fillWithValuesBuffer(this->curOutputs, 0, 0, SAMPLES_PER_DATA_CALLBACK, this->allCurrentSamples);
+
+        this->_addSamples(this->curOutputs, this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
+        this->_fillWithValuesBuffer(this->lastOutputToAdd, 0, SAMPLES_PER_DATA_CALLBACK, SAMPLES_PER_DATA_CALLBACK, this->allCurrentSamples);
+
+        for (int32_t i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
+            *output++ = (float) this->curOutputs[i];
         }
     }
 
@@ -271,6 +343,7 @@ public:
         this->_fillWithValuesBuffer(this->allCurrentSamples, 0, 0, SAMPLES_PER_DATA_CALLBACK, this->prevSamples);
         this->_fillWithValuesBuffer(this->allCurrentSamples, SAMPLES_PER_DATA_CALLBACK, 0, SAMPLES_PER_DATA_CALLBACK, actualInput);
 
+        this->_fillWithValuesBuffer(this->prevSamples, 0,  0, SAMPLES_PER_DATA_CALLBACK, actualInput);
         if (useWindow) {
             this->_multiplySamples(this->allCurrentSamples, this->window, SAMPLES_TO_MODEL);
         }
@@ -367,7 +440,7 @@ public:
 
 
 //                this->processor.rearrange(this->allCurrentSamples);
-                this->processor.fftVectors(this->allCurrentSamples, dftInput);
+                this->processor.dft(this->allCurrentSamples, dftInput);
 
                 OrtValue * inputTensorReal = NULL;
                 OrtValue * inputTensorImag = NULL;
@@ -429,7 +502,7 @@ public:
                         floatImagDataBuffer
                 };
 
-                this->processor.ifftVectors(dftOutput, this->idftOutput);
+                this->processor.idft(dftOutput, this->idftOutput);
 
                 outputTensors[0] = NULL;
 
@@ -527,8 +600,6 @@ public:
         for (int i = 0; i < outputCount; i++) {
             delete outputNames[i];
         }
-
-        this->_fillWithValuesBuffer(this->prevSamples, 0,  SAMPLES_PER_DATA_CALLBACK, SAMPLES_PER_DATA_CALLBACK, floatBuffer);
     }
 };
 
