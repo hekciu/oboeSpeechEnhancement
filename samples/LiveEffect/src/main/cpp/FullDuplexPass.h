@@ -66,7 +66,7 @@ public:
         // It is possible that there may be fewer input than output samples.
 //        int32_t samplesToProcess = std::min(numInputSamples, numOutputSamples);
 //        for (int32_t i = 0; i < samplesToProcess; i++) {
-//            *outputFloats++ = *inputFloats++ * 0.95; // do some arbitrary processing
+////            *outputFloats++ = *inputFloats++ * 0.95; // do some arbitrary processing
 //            *outputFloats++ = *inputFloats++;
 //        }
 
@@ -103,7 +103,7 @@ public:
 //        this->onnxHelper->processDebug(inputFloats, outputFloats);
 //
 //        this->debugCounter++;
-
+//
 //        if (debugCounter == 400) {
 //            std::string test = "";
 //            for (int i = 50; i < 80; i++) {
@@ -117,12 +117,7 @@ public:
 
 //        this->onnxHelper->doOnlyWindow(buff, outputBuff);
 //
-//        std::string test = "";
-//        for (int i = 0; i < 256; i++) {
-//            test += std::to_string(outputBuff[i]) + ", ";
-//        }
-//        throw std::invalid_argument(test.c_str());
-//        this->onnxHelper->dumbProcessing(outputFloats, outputFloats, numOutputSamples);
+
         return oboe::DataCallbackResult::Continue;
     }
 };

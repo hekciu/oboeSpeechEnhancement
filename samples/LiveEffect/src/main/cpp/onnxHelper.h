@@ -108,7 +108,7 @@ private:
 
     const T PI = 3.14159265358979323846264338327950288419716939937510;
     T window[SAMPLES_TO_MODEL];
-    T gruHiddenStates[GRU_LAYERS_NUMBER][GRU_HIDDEN_STATE_SIZE];
+    T * gruHiddenStates[GRU_LAYERS_NUMBER];
 
     FourierProcessor<T> processor;
 
@@ -132,7 +132,7 @@ public:
         this->_checkStatus(this->g_ort->SetIntraOpNumThreads(this->session_options, 1));
         this->_checkStatus(this->g_ort->SetSessionGraphOptimizationLevel(this->session_options, ORT_ENABLE_BASIC));
 
-        this->modelAsset = AAssetManager_open(*this->mgr, "model_256_input_512_gru_zeros.onnx", AASSET_MODE_BUFFER);
+        this->modelAsset = AAssetManager_open(*this->mgr, "model_3.onnx", AASSET_MODE_BUFFER);
 
         size_t modelDataBufferLength = (size_t) AAsset_getLength(this->modelAsset);
         this->modelDataBuffer = AAsset_getBuffer(this->modelAsset);
@@ -151,7 +151,8 @@ public:
         this->_fillZeros(this->lastOutputToAdd, SAMPLES_PER_DATA_CALLBACK);
 
         for (size_t n = 0; n < GRU_LAYERS_NUMBER; n++) {
-            this->_fillZeros(this->gruHiddenStates[n], GRU_HIDDEN_STATE_SIZE);
+            this->gruHiddenStates[n] = new T[GRU_HIDDEN_STATE_SIZES[n]];
+            this->_fillZeros(this->gruHiddenStates[n], GRU_HIDDEN_STATE_SIZES[n]);
         }
     }
 
@@ -163,6 +164,9 @@ public:
         this->g_ort->ReleaseEnv(this->env);
         delete this->g_ort;
         delete this->mgr;
+        for (size_t n = 0; n < GRU_LAYERS_NUMBER; n++) {
+            delete[] this->gruHiddenStates[n];
+        }
     }
 
     void dumbProcessing(float * input, float * output, int N) {
@@ -362,7 +366,7 @@ public:
                                                                        dataLenBytes,
                                                                        shape,
                                                                        shapeLen,
-                                                                       this->tensorType ,
+                                                                       this->tensorType,
                                                                        &inputTensor));
 
         OrtValue * outputTensor = NULL;
@@ -410,11 +414,10 @@ public:
                 outputTensor
         };
 
-        const int GRU_CONV_FACTOR = (GRU_HIDDEN_STATE_SIZE/SAMPLES_TO_MODEL);
-        int64_t shapeGru[] = {shape[0] * GRU_CONV_FACTOR};
-
         if (useGru) {
             for (int n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
+                const int GRU_CONV_FACTOR = (GRU_HIDDEN_STATE_SIZES[n - 1]/SAMPLES_TO_MODEL);
+                int64_t shapeGru[] = {shape[0] * GRU_CONV_FACTOR};
                 this->_checkStatus(this->g_ort->CreateTensorWithDataAsOrtValue(memoryInfo,
                                                                                this->gruHiddenStates[n-1],
                                                                                dataLenBytes * GRU_CONV_FACTOR,
@@ -560,7 +563,7 @@ public:
             for (size_t n = 1; n < GRU_LAYERS_NUMBER + 1; n++) {
                 this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensors[n], &gruStateBuffers[n - 1]));
 
-                this->_fillWithValuesBuffer(this->gruHiddenStates[n - 1], 0, 0, GRU_HIDDEN_STATE_SIZE, (T *) gruStateBuffers[n-1]);
+                this->_fillWithValuesBuffer(this->gruHiddenStates[n - 1], 0, 0, GRU_HIDDEN_STATE_SIZES[n - 1], (T *) gruStateBuffers[n-1]);
             }
         } else {
             this->_checkStatus(this->g_ort->GetTensorMutableData(outputTensor, &buffer));
@@ -579,7 +582,7 @@ public:
 //        this->_fillZeros(zerosArray, 100);
 
         for (int32_t i = 0; i < SAMPLES_PER_DATA_CALLBACK; i++) {
-            *output++ = (float) this->curOutputs[i];
+            *output++ = (float) this->curOutputs[i]  / (float) 40;
         }
 //        this->_fillWithValuesBuffer(*input, 0, 0, SAMPLES_PER_DATA_CALLBACK, zerosArray);
 //        std::copy(this->curOutputs, this->curOutputs + SAMPLES_PER_DATA_CALLBACK, input);
